@@ -1,0 +1,254 @@
+{% extends "base.html" %}
+{% set active = 'analytics' %}
+{% block title %}Analytics — RehabOS{% endblock %}
+{% block page_title %}Analytics{% endblock %}
+
+{% block head %}
+<style>
+.analytics-layout { display:grid; grid-template-columns:240px 1fr; gap:16px; min-height:500px; }
+.patient-sel-card { display:flex; flex-direction:column; gap:10px; }
+.chart-panel { display:flex; flex-direction:column; gap:16px; }
+.chart-row { display:grid; grid-template-columns:1fr 1fr; gap:16px; }
+.chart-card { background:var(--surface); border:1px solid var(--border);
+  border-radius:var(--r-lg); padding:18px; box-shadow:var(--shadow); }
+.chart-title { font-size:11px; font-family:var(--mono); color:var(--text3);
+  letter-spacing:.8px; text-transform:uppercase; margin-bottom:14px; }
+.chart-h { height:180px; }
+.chart-h-lg { height:240px; }
+
+.summary-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:10px; margin-bottom:16px; }
+.summary-box {
+  background:var(--surface2); border:1px solid var(--border);
+  border-radius:var(--r); padding:12px; text-align:center;
+}
+.summary-val { font-size:22px; font-family:var(--mono); font-weight:600;
+  color:var(--text); letter-spacing:-1px; }
+.summary-lbl { font-size:10.5px; color:var(--text3); margin-top:3px; }
+
+.pat-sel-row {
+  padding:10px 12px; border-radius:var(--r); cursor:pointer;
+  display:flex; align-items:center; gap:10px; border:1px solid transparent;
+  transition:all .12s;
+}
+.pat-sel-row:hover { background:var(--bg); }
+.pat-sel-row.active { background:var(--teal-bg); border-color:var(--teal); }
+.pat-av-sm {
+  width:32px; height:32px; border-radius:50%; background:var(--teal-light);
+  display:flex; align-items:center; justify-content:center;
+  font-size:12px; font-weight:600; color:var(--teal-dark); flex-shrink:0;
+}
+
+.joint-tabs { display:flex; gap:6px; flex-wrap:wrap; margin-bottom:14px; }
+.joint-tab {
+  font-size:12px; padding:4px 10px; border-radius:var(--r);
+  border:1px solid var(--border2); background:var(--surface);
+  color:var(--text2); cursor:pointer; transition:all .12s; font-family:var(--mono);
+}
+.joint-tab.active { background:var(--teal); color:#fff; border-color:var(--teal); }
+
+@media(max-width:900px){ .analytics-layout{grid-template-columns:1fr} .chart-row{grid-template-columns:1fr} }
+</style>
+{% endblock %}
+
+{% block topbar_actions %}
+  <button class="btn btn-ghost btn-sm" onclick="exportData()">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+    Export
+  </button>
+{% endblock %}
+
+{% block content %}
+<div class="analytics-layout">
+
+  <!-- Patient selector -->
+  <div class="patient-sel-card">
+    <div class="card card-sm">
+      <div class="card-title" style="margin-bottom:8px">Select Patient</div>
+      <div id="patSelList">
+        <div style="color:var(--text3);font-size:12px;text-align:center;padding:12px">Loading…</div>
+      </div>
+    </div>
+    <div class="card card-sm" id="sessionCountCard" style="display:none">
+      <div class="card-title" style="margin-bottom:8px">Session Range</div>
+      <div class="form-group">
+        <label class="form-label">Last N sessions</label>
+        <input type="number" class="form-input" id="nSessions" value="10" min="1" max="50" onchange="loadAnalytics()">
+      </div>
+    </div>
+  </div>
+
+  <!-- Charts panel -->
+  <div class="chart-panel" id="chartPanel">
+    <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);padding:60px;text-align:center;color:var(--text3)">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" style="width:40px;height:40px;margin:0 auto 12px;display:block;opacity:.3"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+      <div style="font-size:15px;font-weight:500;color:var(--text2)">Select a patient to view analytics</div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+let _selPat=null;
+let _charts={};
+
+async function loadPatients(){
+  try{
+    const pts=await apiFetch('/api/patients');
+    const el=document.getElementById('patSelList');
+    if(!pts.length){ el.innerHTML='<div style="color:var(--text3);font-size:12px;text-align:center;padding:10px">No patients yet</div>'; return; }
+    el.innerHTML=pts.map(p=>`
+      <div class="pat-sel-row" onclick="selectPat(${p.id},'${p.first_name} ${p.last_name}')" id="psr-${p.id}">
+        <div class="pat-av-sm">${p.first_name[0]}${p.last_name[0]}</div>
+        <div style="flex:1;min-width:0">
+          <div style="font-size:13px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${p.first_name} ${p.last_name}</div>
+          <div style="font-size:11px;color:var(--text3)">${p.affected_side} side</div>
+        </div>
+      </div>`).join('');
+  }catch(e){}
+}
+
+async function selectPat(id, name){
+  _selPat=id;
+  document.querySelectorAll('.pat-sel-row').forEach(r=>r.classList.remove('active'));
+  document.getElementById(`psr-${id}`)?.classList.add('active');
+  document.getElementById('sessionCountCard').style.display='block';
+  await loadAnalytics(name);
+}
+
+async function loadAnalytics(name=''){
+  if(!_selPat) return;
+  const n=document.getElementById('nSessions').value;
+  try{
+    const [effort, romKnee, romHip] = await Promise.all([
+      apiFetch(`/api/analytics/${_selPat}/effort?sessions=${n}`),
+      apiFetch(`/api/analytics/${_selPat}/rom?joint=knee_flex_ext`),
+      apiFetch(`/api/analytics/${_selPat}/rom?joint=hip_flex_ext`),
+    ]);
+
+    const sessions=effort.length;
+    const avgEffort=sessions?effort.reduce((a,e)=>a+(e.avg_patient_effort||0),0)/sessions:0;
+    const maxKnee=romKnee.length?Math.max(...romKnee.map(r=>r.passive_rom_deg||0)):0;
+    const maxHip=romHip.length?Math.max(...romHip.map(r=>r.passive_rom_deg||0)):0;
+
+    document.getElementById('chartPanel').innerHTML=`
+      <!-- Summary -->
+      <div class="summary-grid">
+        <div class="summary-box"><div class="summary-val">${sessions}</div><div class="summary-lbl">Sessions</div></div>
+        <div class="summary-box"><div class="summary-val">${avgEffort.toFixed(0)}%</div><div class="summary-lbl">Avg Patient Effort</div></div>
+        <div class="summary-box"><div class="summary-val">${maxKnee.toFixed(0)}°</div><div class="summary-lbl">Best Knee ROM</div></div>
+        <div class="summary-box"><div class="summary-val">${maxHip.toFixed(0)}°</div><div class="summary-lbl">Best Hip ROM</div></div>
+      </div>
+
+      <!-- Effort trend -->
+      <div class="chart-card">
+        <div class="chart-title">Patient vs Robot Effort Over Sessions</div>
+        <div class="chart-h-lg"><canvas id="cEffort"></canvas></div>
+      </div>
+
+      <!-- ROM charts -->
+      <div class="chart-row">
+        <div class="chart-card">
+          <div class="chart-title">Knee ROM Progression</div>
+          <div class="chart-h"><canvas id="cKnee"></canvas></div>
+        </div>
+        <div class="chart-card">
+          <div class="chart-title">Hip ROM Progression</div>
+          <div class="chart-h"><canvas id="cHip"></canvas></div>
+        </div>
+      </div>
+
+      <!-- Max ROM per session -->
+      <div class="chart-row">
+        <div class="chart-card">
+          <div class="chart-title">Max Hip Flex Achieved per Session</div>
+          <div class="chart-h"><canvas id="cMaxHip"></canvas></div>
+        </div>
+        <div class="chart-card">
+          <div class="chart-title">Max Knee Flex Achieved per Session</div>
+          <div class="chart-h"><canvas id="cMaxKnee"></canvas></div>
+        </div>
+      </div>
+
+      <!-- Session table -->
+      <div class="chart-card" style="padding:0;overflow:hidden">
+        <div style="padding:16px 20px 0">
+          <div class="chart-title">Session History</div>
+        </div>
+        <div class="tbl-wrap" style="border:none;border-radius:0;margin-top:8px">
+          <table>
+            <thead><tr><th>#</th><th>Date</th><th>Mode</th><th>Patient Effort</th><th>Robot Effort</th><th>Max Hip</th><th>Max Knee</th><th>Status</th></tr></thead>
+            <tbody>
+              ${effort.length===0
+                ? '<tr><td colspan="8" style="text-align:center;color:var(--text3);padding:20px">No session data</td></tr>'
+                : effort.map(s=>`
+                  <tr>
+                    <td style="font-family:var(--mono);color:var(--text3);font-size:12px">#${s.session_id}</td>
+                    <td>${new Date(s.start_time).toLocaleDateString('en-GB')}</td>
+                    <td><span class="badge badge-${s.mode==='passive'?'blue':s.mode==='active'?'green':'amber'}">${s.mode||'—'}</span></td>
+                    <td style="color:var(--green);font-weight:600;font-family:var(--mono)">${s.avg_patient_effort!=null?s.avg_patient_effort.toFixed(1)+'%':'—'}</td>
+                    <td style="color:var(--teal);font-weight:600;font-family:var(--mono)">${s.avg_robot_effort!=null?s.avg_robot_effort.toFixed(1)+'%':'—'}</td>
+                    <td style="font-family:var(--mono)">${s.max_hip_flex!=null?s.max_hip_flex.toFixed(1)+'°':'—'}</td>
+                    <td style="font-family:var(--mono)">${s.max_knee_flex!=null?s.max_knee_flex.toFixed(1)+'°':'—'}</td>
+                    <td><span class="badge badge-gray">${s.mode||'—'}</span></td>
+                  </tr>`).join('')}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    `;
+
+    const labels=effort.map((_,i)=>`S${i+1}`);
+    const opts={responsive:true,maintainAspectRatio:false,animation:{duration:400},plugins:{legend:{labels:{font:{family:'DM Mono',size:11},color:'#475569'}}},scales:{x:{ticks:{font:{family:'DM Mono',size:10},color:'#94a3b8'},grid:{color:'rgba(0,0,0,.04)'}},y:{ticks:{font:{family:'DM Mono',size:10},color:'#94a3b8'},grid:{color:'rgba(0,0,0,.04)'}}}};
+
+    new Chart(document.getElementById('cEffort').getContext('2d'),{
+      type:'line',
+      data:{labels,datasets:[
+        {label:'Patient Effort %',data:effort.map(e=>+(e.avg_patient_effort||0).toFixed(1)),borderColor:'#16a34a',backgroundColor:'rgba(22,163,74,.08)',fill:true,tension:.4,pointRadius:4,borderWidth:2},
+        {label:'Robot Effort %',data:effort.map(e=>+(100-(e.avg_patient_effort||0)).toFixed(1)),borderColor:'#0d9488',backgroundColor:'rgba(13,148,136,.06)',fill:true,tension:.4,pointRadius:4,borderWidth:2},
+      ]},options:{...opts,scales:{...opts.scales,y:{...opts.scales.y,min:0,max:100}}}
+    });
+
+    const romOpts={...opts,plugins:{legend:{display:false}},scales:{...opts.scales,y:{...opts.scales.y,min:0}}};
+    const romLabels=romKnee.map((_,i)=>`S${i+1}`);
+
+    new Chart(document.getElementById('cKnee').getContext('2d'),{
+      type:'line',
+      data:{labels:romLabels,datasets:[
+        {label:'Passive ROM',data:romKnee.map(r=>r.passive_rom_deg),borderColor:'#0d9488',backgroundColor:'rgba(13,148,136,.08)',fill:true,tension:.4,pointRadius:4,borderWidth:2},
+        {label:'Active ROM',data:romKnee.map(r=>r.active_rom_deg),borderColor:'#16a34a',backgroundColor:'rgba(22,163,74,.06)',fill:true,tension:.4,pointRadius:4,borderWidth:2,borderDash:[4,4]},
+      ]},options:romOpts
+    });
+
+    const romHipLabels=romHip.map((_,i)=>`S${i+1}`);
+    new Chart(document.getElementById('cHip').getContext('2d'),{
+      type:'line',
+      data:{labels:romHipLabels,datasets:[
+        {label:'Passive ROM',data:romHip.map(r=>r.passive_rom_deg),borderColor:'#2563eb',backgroundColor:'rgba(37,99,235,.08)',fill:true,tension:.4,pointRadius:4,borderWidth:2},
+        {label:'Active ROM',data:romHip.map(r=>r.active_rom_deg),borderColor:'#7c3aed',backgroundColor:'rgba(124,58,237,.06)',fill:true,tension:.4,pointRadius:4,borderWidth:2,borderDash:[4,4]},
+      ]},options:romOpts
+    });
+
+    new Chart(document.getElementById('cMaxHip').getContext('2d'),{
+      type:'bar',
+      data:{labels,datasets:[{label:'Max Hip Flex °',data:effort.map(e=>e.max_hip_flex?.toFixed(1)||0),backgroundColor:'rgba(37,99,235,.7)',borderRadius:4}]},
+      options:{...romOpts,plugins:{legend:{display:false}}}
+    });
+
+    new Chart(document.getElementById('cMaxKnee').getContext('2d'),{
+      type:'bar',
+      data:{labels,datasets:[{label:'Max Knee Flex °',data:effort.map(e=>e.max_knee_flex?.toFixed(1)||0),backgroundColor:'rgba(13,148,136,.7)',borderRadius:4}]},
+      options:{...romOpts,plugins:{legend:{display:false}}}
+    });
+
+  }catch(e){ console.error(e); }
+}
+
+function exportData(){
+  if(!_selPat){ toast('Select a patient first','warning'); return; }
+  toast('Export coming soon','info');
+}
+
+loadPatients();
+</script>
+{% endblock %}

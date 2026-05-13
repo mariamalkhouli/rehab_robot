@@ -1,0 +1,412 @@
+{% extends "base.html" %}
+{% set active = 'dashboard' %}
+{% block title %}Dashboard — RehabOS{% endblock %}
+{% block page_title %}Dashboard{% endblock %}
+{% block topbar_actions %}
+  <button class="btn btn-primary btn-sm" onclick="openModal('modalSession')">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+    New Session
+  </button>
+{% endblock %}
+
+{% block head %}
+<style>
+.stats-row { display:grid; grid-template-columns:repeat(4,1fr); gap:14px; margin-bottom:20px; }
+.dash-body  { display:grid; grid-template-columns:1fr 320px; gap:16px; }
+
+.hw-grid { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+.hw-card {
+  background:var(--surface2); border:1px solid var(--border);
+  border-radius:var(--r); padding:12px 14px;
+  display:flex; align-items:center; gap:10px;
+}
+.hw-ind {
+  width:10px; height:10px; border-radius:50%;
+  background:var(--border2); flex-shrink:0; transition:background .3s;
+}
+.hw-ind.on  { background:var(--green); box-shadow:0 0 0 2px #dcfce7; }
+.hw-ind.off { background:var(--red); box-shadow:0 0 0 2px #fee2e2; }
+.hw-ind.warn{ background:var(--amber); }
+.hw-name { font-size:12.5px; font-weight:500; }
+.hw-detail { font-size:11px; font-family:var(--mono); color:var(--text3); margin-top:1px; }
+
+.angle-grid { display:grid; grid-template-columns:repeat(4,1fr); gap:10px; }
+.angle-box {
+  background:var(--surface2); border:1px solid var(--border);
+  border-radius:var(--r); padding:12px; text-align:center;
+}
+.angle-lbl { font-size:10px; font-family:var(--mono); color:var(--text3);
+  text-transform:uppercase; letter-spacing:.5px; margin-bottom:4px; }
+.angle-val { font-size:22px; font-family:var(--mono); font-weight:500;
+  color:var(--teal); letter-spacing:-1px; }
+.angle-unit { font-size:10px; color:var(--text3); font-family:var(--mono); }
+
+.patient-row {
+  display:flex; align-items:center; gap:10px; padding:9px 0;
+  border-bottom:1px solid var(--border); cursor:pointer; transition:opacity .13s;
+}
+.patient-row:last-child { border-bottom:none; }
+.patient-row:hover { opacity:.75; }
+.p-avatar {
+  width:34px; height:34px; border-radius:50%;
+  background:var(--teal-light); border:1px solid var(--border);
+  display:flex; align-items:center; justify-content:center;
+  font-size:12px; font-weight:600; color:var(--teal-dark); flex-shrink:0;
+}
+.p-name { font-size:13.5px; font-weight:500; }
+.p-meta { font-size:11.5px; color:var(--text3); margin-top:1px; }
+
+.log-item { display:flex; gap:8px; font-size:11.5px; font-family:var(--mono); }
+.log-time { color:var(--text3); flex-shrink:0; }
+.log-msg  { color:var(--text2); }
+.log-msg.error   { color:var(--red); }
+.log-msg.warning { color:var(--amber); }
+
+@media(max-width:1100px){ .stats-row{grid-template-columns:1fr 1fr} .dash-body{grid-template-columns:1fr} }
+</style>
+{% endblock %}
+
+{% block content %}
+<!-- Stats row -->
+<div class="stats-row">
+  <div class="stat-card teal">
+    <div class="stat-top">
+      <div class="stat-icon teal">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>
+      </div>
+    </div>
+    <div class="stat-val" id="sPatients">—</div>
+    <div class="stat-label">Active Patients</div>
+  </div>
+  <div class="stat-card green">
+    <div class="stat-top">
+      <div class="stat-icon green">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+      </div>
+    </div>
+    <div class="stat-val" id="sSessions">—</div>
+    <div class="stat-label">Sessions This Week</div>
+  </div>
+  <div class="stat-card amber">
+    <div class="stat-top">
+      <div class="stat-icon amber">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+      </div>
+    </div>
+    <div class="stat-val" id="sEffort">—</div>
+    <div class="stat-label">Avg Patient Effort</div>
+  </div>
+  <div class="stat-card blue">
+    <div class="stat-top">
+      <div class="stat-icon blue">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+      </div>
+    </div>
+    <div class="stat-val" id="sUptime">00:00:00</div>
+    <div class="stat-label">System Uptime</div>
+  </div>
+</div>
+
+<div class="dash-body">
+  <!-- LEFT -->
+  <div style="display:flex;flex-direction:column;gap:16px">
+
+    <!-- Hardware status -->
+    <div class="card">
+      <div class="card-header">
+        <span class="card-title">Hardware Status</span>
+        <span class="badge badge-gray" id="hwTime">—</span>
+      </div>
+      <div class="hw-grid">
+        <div class="hw-card">
+          <div class="hw-ind" id="hwArduino"></div>
+          <div><div class="hw-name">Arduino Mega</div><div class="hw-detail" id="hwArdDetail">Disconnected</div></div>
+        </div>
+        <div class="hw-card">
+          <div class="hw-ind" id="hwESP"></div>
+          <div><div class="hw-name">E-Stop Remote</div><div class="hw-detail" id="hwESPDetail">No heartbeat</div></div>
+        </div>
+        <div class="hw-card">
+          <div class="hw-ind" id="hwMotors"></div>
+          <div><div class="hw-name">Motors</div><div class="hw-detail" id="hwMotDetail">Unknown</div></div>
+        </div>
+        <div class="hw-card">
+          <div class="hw-ind" id="hwSensors"></div>
+          <div><div class="hw-name">Sensors</div><div class="hw-detail" id="hwSenDetail">No data</div></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Motor angles -->
+    <div class="card">
+      <div class="card-header">
+        <span class="card-title">Motor Positions (live)</span>
+        <span class="badge badge-teal">20 Hz</span>
+      </div>
+      <div class="angle-grid">
+        <div class="angle-box"><div class="angle-lbl">M1 Ab/Ad</div><div class="angle-val" id="av1">0.00</div><div class="angle-unit">°</div></div>
+        <div class="angle-box"><div class="angle-lbl">M2 Hip</div><div class="angle-val" id="av2">0.00</div><div class="angle-unit">°</div></div>
+        <div class="angle-box"><div class="angle-lbl">M3 Knee</div><div class="angle-val" id="av3">0.00</div><div class="angle-unit">°</div></div>
+        <div class="angle-box"><div class="angle-lbl">M4 Align</div><div class="angle-val" id="av4">0.00</div><div class="angle-unit">°</div></div>
+      </div>
+    </div>
+
+    <!-- Recent sessions -->
+    <div class="card" style="padding:0;overflow:hidden">
+      <div class="card-header" style="padding:16px 20px 0">
+        <span class="card-title">Recent Sessions</span>
+        <a href="/patients" class="btn btn-ghost btn-sm">View all</a>
+      </div>
+      <div class="tbl-wrap" style="border:none;border-radius:0;margin-top:12px">
+        <table>
+          <thead><tr><th>Patient</th><th>Mode</th><th>Duration</th><th>Effort</th><th>Status</th></tr></thead>
+          <tbody id="recentTbody">
+            <tr><td colspan="5" style="text-align:center;color:var(--text3);padding:20px">No sessions yet</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </div>
+
+  <!-- RIGHT -->
+  <div style="display:flex;flex-direction:column;gap:16px">
+
+    <!-- Quick start -->
+    <div class="card" style="background:linear-gradient(135deg,var(--teal-bg),var(--surface))">
+      <div class="card-title" style="margin-bottom:14px">Quick Start</div>
+      <div style="display:flex;flex-direction:column;gap:10px">
+        <div class="form-group">
+          <label class="form-label">Patient</label>
+          <select class="form-select" id="qPatient"><option value="">Select patient…</option></select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Mode</label>
+          <select class="form-select" id="qMode">
+            <option value="passive">Passive CPM</option>
+            <option value="active">Active-Assistive</option>
+            <option value="mimicry">Mimicry / Teach</option>
+          </select>
+        </div>
+        <button class="btn btn-primary btn-lg" style="width:100%;justify-content:center" onclick="quickStart()">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="width:15px;height:15px"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+          Start Session
+        </button>
+      </div>
+    </div>
+
+    <!-- Patient list -->
+    <div class="card">
+      <div class="card-header">
+        <span class="card-title">Patients</span>
+        <a href="/patients" class="btn btn-ghost btn-sm">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          Add
+        </a>
+      </div>
+      <div id="patientList"><div style="color:var(--text3);font-size:13px;text-align:center;padding:14px">Loading…</div></div>
+    </div>
+
+    <!-- System log -->
+    <div class="card">
+      <div class="card-header"><span class="card-title">System Log</span></div>
+      <div id="sysLog" style="display:flex;flex-direction:column;gap:5px;max-height:160px;overflow-y:auto">
+        <div style="color:var(--text3);font-size:12px">Loading…</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- New Session Modal -->
+<div class="modal-bg" id="modalSession">
+  <div class="modal">
+    <div class="modal-title">New Therapy Session</div>
+    <div class="modal-sub">Configure session parameters before starting.</div>
+    <div style="display:flex;flex-direction:column;gap:14px">
+      <div class="form-group">
+        <label class="form-label">Patient *</label>
+        <select class="form-select" id="mPatient"><option value="">Select patient…</option></select>
+      </div>
+      <div class="g2">
+        <div class="form-group">
+          <label class="form-label">Affected Leg</label>
+          <select class="form-select" id="mLeg">
+            <option value="right">Right</option>
+            <option value="left">Left</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Therapy Mode *</label>
+          <select class="form-select" id="mMode">
+            <option value="passive">Passive CPM</option>
+            <option value="active">Active-Assistive</option>
+            <option value="mimicry">Mimicry / Teach</option>
+          </select>
+        </div>
+      </div>
+      <div class="g2">
+        <div class="form-group">
+          <label class="form-label">Speed (°/sec)</label>
+          <input type="number" class="form-input" id="mSpeed" value="5" min="1" max="15" step="0.5">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Repetitions</label>
+          <input type="number" class="form-input" id="mReps" value="10" min="1" max="100">
+        </div>
+      </div>
+      <div>
+        <div class="form-label" style="margin-bottom:10px">ROM Targets</div>
+        <div class="g3">
+          <div class="form-group">
+            <label class="form-label" style="font-size:10px">Hip Flex Max (°)</label>
+            <input type="number" class="form-input" id="mHipFlex" value="90" min="0" max="120">
+          </div>
+          <div class="form-group">
+            <label class="form-label" style="font-size:10px">Knee Flex Max (°)</label>
+            <input type="number" class="form-input" id="mKneeFlex" value="90" min="0" max="130">
+          </div>
+          <div class="form-group">
+            <label class="form-label" style="font-size:10px">Ab/Ad Max (°)</label>
+            <input type="number" class="form-input" id="mAbAd" value="25" min="0" max="30">
+          </div>
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Notes</label>
+        <input type="text" class="form-input" id="mNotes" placeholder="Optional clinical notes…">
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('modalSession')">Cancel</button>
+      <button class="btn btn-primary" onclick="startSession()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+        Start Session
+      </button>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+/* uptime */
+const t0=Date.now();
+setInterval(()=>{
+  const s=Math.floor((Date.now()-t0)/1000);
+  const h=String(Math.floor(s/3600)).padStart(2,'0');
+  const m=String(Math.floor((s%3600)/60)).padStart(2,'0');
+  const sc=String(s%60).padStart(2,'0');
+  document.getElementById('sUptime').textContent=`${h}:${m}:${sc}`;
+},1000);
+
+/* live angles */
+window._ws.angles=d=>{
+  document.getElementById('av1').textContent=d.ax1.toFixed(2);
+  document.getElementById('av2').textContent=d.ax2.toFixed(2);
+  document.getElementById('av3').textContent=d.ax3.toFixed(2);
+  document.getElementById('av4').textContent=d.ax4.toFixed(2);
+};
+
+/* system status */
+socket.on('system_status',d=>{
+  const ser=d.serial||{}, saf=d.safety||{};
+  const ind=(id,cls,detail)=>{
+    const el=document.getElementById(id); if(el)el.className='hw-ind '+cls;
+    const dl=document.getElementById(id+'Detail'); if(dl&&detail)dl.textContent=detail;
+  };
+  ind('hwArduino', ser.is_open?'on':'off',
+    ser.is_open?(ser.is_halted?'Connected · HALTED':'Connected · Ready'):'Disconnected');
+  const st=saf.state||'DISARMED';
+  ind('hwESP', st==='ARMED'?'on':st==='ESTOPPED'?'off':'warn',
+    st==='ARMED'?`Armed · ${saf.esp32_ip||'—'}`:st==='ESTOPPED'?'E-STOP ACTIVE':'Waiting…');
+  ind('hwMotors', ser.is_halted?'off':ser.is_open?'on':'',
+    ser.is_halted?'Halted':ser.is_open?'Ready':'No connection');
+  document.getElementById('hwTime').textContent=
+    new Date().toLocaleTimeString('en-GB',{hour12:false});
+});
+
+window._ws.sensor=d=>{
+  const ind=document.getElementById('hwSensors');
+  const det=document.getElementById('hwSenDetail');
+  if(ind) ind.className='hw-ind '+(d.sensor_stale?'warn':'on');
+  if(det) det.textContent=d.sensor_stale?'Stale data':`FSR:${d.fsr_raw} EMG:${d.emg_raw}`;
+};
+
+/* load patients */
+async function loadPatients(){
+  try{
+    const pts=await apiFetch('/api/patients');
+    document.getElementById('sPatients').textContent=pts.length;
+    ['qPatient','mPatient'].forEach(id=>{
+      const sel=document.getElementById(id);
+      pts.forEach(p=>{
+        const o=document.createElement('option');
+        o.value=p.id; o.textContent=`${p.first_name} ${p.last_name}`;
+        sel.appendChild(o);
+      });
+    });
+    const list=document.getElementById('patientList');
+    if(!pts.length){ list.innerHTML='<div style="color:var(--text3);font-size:13px;text-align:center;padding:12px">No patients yet</div>'; return; }
+    list.innerHTML=pts.slice(0,6).map(p=>`
+      <div class="patient-row" onclick="location='/patients/${p.id}'">
+        <div class="p-avatar">${p.first_name[0]}${p.last_name[0]}</div>
+        <div style="flex:1;min-width:0">
+          <div class="p-name">${p.first_name} ${p.last_name}</div>
+          <div class="p-meta">${p.diagnosis} · ${p.affected_side} side</div>
+        </div>
+        <span class="badge badge-teal">${p.affected_side[0].toUpperCase()}</span>
+      </div>`).join('');
+  }catch(e){}
+}
+
+async function loadLog(){
+  try{
+    const evs=await apiFetch('/api/system/events?limit=8');
+    const el=document.getElementById('sysLog');
+    if(!evs.length){ el.innerHTML='<div style="color:var(--text3);font-size:12px">No events yet.</div>'; return; }
+    el.innerHTML=evs.map(e=>{
+      const t=new Date(e.timestamp).toLocaleTimeString('en-GB',{hour12:false});
+      const cls=e.severity==='error'?'error':e.severity==='warning'?'warning':'';
+      return `<div class="log-item"><span class="log-time">${t}</span><span class="log-msg ${cls}">${e.message}</span></div>`;
+    }).join('');
+  }catch(e){}
+}
+
+function quickStart(){
+  const pid=document.getElementById('qPatient').value;
+  const mode=document.getElementById('qMode').value;
+  if(!pid){ toast('Select a patient first','warning'); return; }
+  sessionStorage.setItem('sid_patient',pid);
+  sessionStorage.setItem('sid_mode',mode);
+  location.href='/therapy';
+}
+
+async function startSession(){
+  const pid=document.getElementById('mPatient').value;
+  if(!pid){ toast('Select a patient first','warning'); return; }
+  try{
+    const r=await apiFetch('/api/sessions/start',{
+      method:'POST',
+      body:JSON.stringify({
+        patient_id:parseInt(pid),
+        mode:document.getElementById('mMode').value,
+        speed:parseFloat(document.getElementById('mSpeed').value),
+        hip_flex_max:parseFloat(document.getElementById('mHipFlex').value),
+        knee_flex_max:parseFloat(document.getElementById('mKneeFlex').value),
+        reps_target:parseInt(document.getElementById('mReps').value),
+      })
+    });
+    closeModal('modalSession');
+    toast('Session started','success');
+    sessionStorage.setItem('sid_session',r.session_id);
+    sessionStorage.setItem('sid_patient',pid);
+    sessionStorage.setItem('sid_mode',document.getElementById('mMode').value);
+    sessionStorage.setItem('sid_leg',document.getElementById('mLeg').value);
+    location.href='/therapy';
+  }catch(e){}
+}
+
+loadPatients();
+loadLog();
+setInterval(loadLog,12000);
+</script>
+{% endblock %}

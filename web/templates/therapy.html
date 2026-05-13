@@ -1,0 +1,937 @@
+{% extends "base.html" %}
+{% set active = 'therapy' %}
+{% block title %}Live Session — RehabOS{% endblock %}
+{% block page_title %}Live Session{% endblock %}
+
+{% block head %}
+<style>
+.therapy-layout { display:grid; grid-template-columns:1fr 320px; gap:14px; }
+.therapy-left   { display:flex; flex-direction:column; gap:12px; }
+.therapy-right  { display:flex; flex-direction:column; gap:12px; }
+
+/* Session bar */
+.session-bar {
+  background:var(--surface); border:1px solid var(--border);
+  border-radius:var(--r-lg); padding:12px 18px;
+  display:flex; align-items:center; gap:14px; flex-wrap:wrap;
+  box-shadow:var(--shadow); margin-bottom:12px;
+}
+.sb-lbl { font-size:10px; font-family:var(--mono); color:var(--text3);
+  text-transform:uppercase; letter-spacing:.5px; margin-bottom:3px; }
+
+/* Leg toggle */
+.leg-toggle { display:flex; border:1px solid var(--border2); border-radius:var(--r); overflow:hidden; }
+.leg-btn { padding:6px 14px; font-size:13px; font-weight:500; border:none;
+  background:var(--surface); color:var(--text2); transition:all .13s; font-family:var(--font); }
+.leg-btn.on { background:var(--teal); color:#fff; }
+
+/* Mode tabs */
+.mode-tabs { display:flex; gap:5px; flex-wrap:wrap; }
+.mode-tab { padding:6px 12px; border-radius:var(--r); font-size:12.5px; font-weight:500;
+  border:1px solid var(--border2); background:var(--surface);
+  color:var(--text2); transition:all .13s; font-family:var(--font); }
+.mode-tab:hover { border-color:var(--teal); color:var(--teal); }
+.mode-tab.on { background:var(--teal); color:#fff; border-color:var(--teal); }
+
+/* Control buttons */
+.ctrl-row { display:flex; gap:8px; align-items:center; flex-wrap:wrap; }
+.btn-big-estop {
+  padding:11px 22px; background:var(--red); color:#fff;
+  border:none; border-radius:var(--r-lg); font-size:14px; font-weight:700;
+  font-family:var(--mono); letter-spacing:.5px; text-transform:uppercase;
+  display:flex; align-items:center; gap:7px;
+  box-shadow:0 2px 8px rgba(220,38,38,.3); transition:filter .13s;
+}
+.btn-big-estop:hover { filter:brightness(1.1); }
+.btn-big-resume {
+  padding:11px 22px; background:var(--green); color:#fff;
+  border:none; border-radius:var(--r-lg); font-size:14px; font-weight:700;
+  font-family:var(--mono); letter-spacing:.5px; text-transform:uppercase;
+  display:none; align-items:center; gap:7px;
+}
+.btn-big-resume.show { display:flex; }
+.btn-big-estop svg, .btn-big-resume svg { width:15px; height:15px; }
+
+/* ROM live */
+.rom-live { display:grid; grid-template-columns:repeat(3,1fr); gap:8px; }
+.rom-live-item { background:var(--surface2); border:1px solid var(--border);
+  border-radius:var(--r); padding:10px 12px; }
+.rll { font-size:10px; font-family:var(--mono); color:var(--text3);
+  text-transform:uppercase; letter-spacing:.4px; margin-bottom:6px; }
+
+/* Sensors */
+.sensor-row { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+.s-card { background:var(--surface); border:1px solid var(--border);
+  border-radius:var(--r-lg); padding:14px 16px; box-shadow:var(--shadow); }
+.s-head { display:flex; align-items:center; justify-content:space-between; margin-bottom:10px; }
+.s-badges { display:flex; gap:5px; flex-wrap:wrap; }
+
+/* FSR bar */
+.fsr-bar-wrap { background:var(--surface2); border:1px solid var(--border);
+  border-radius:var(--r); height:26px; position:relative; overflow:hidden; margin:6px 0; }
+.fsr-bar-fill { position:absolute; top:0; bottom:0; left:50%; width:0;
+  transition:width .08s, left .08s; }
+.fsr-bar-center { position:absolute; top:0; bottom:0; left:50%;
+  width:2px; background:var(--border2); transform:translateX(-50%); }
+.fsr-labels { display:flex; justify-content:space-between;
+  font-size:10px; font-family:var(--mono); color:var(--text3); margin-bottom:3px; }
+
+/* Intent */
+.intent-row { background:var(--surface2); border:1px solid var(--border);
+  border-radius:var(--r); padding:9px 12px;
+  display:flex; align-items:center; gap:10px; margin-top:8px; }
+.i-dot { width:12px; height:12px; border-radius:50%; flex-shrink:0; transition:background .18s; }
+.i-lbl { font-size:12.5px; font-weight:600; font-family:var(--mono); }
+.i-sub { font-size:10.5px; color:var(--text3); margin-top:1px; }
+
+/* Motor gauges */
+.gauge-strip { display:grid; grid-template-columns:repeat(4,1fr); gap:8px; }
+.gauge { background:var(--surface2); border:1px solid var(--border);
+  border-radius:var(--r); padding:10px 12px; text-align:center;
+  position:relative; overflow:hidden; }
+.gauge-bar { position:absolute; bottom:0; left:0; height:3px;
+  background:var(--teal); transition:width .13s; }
+.g-lbl { font-size:9.5px; font-family:var(--mono); color:var(--text3);
+  text-transform:uppercase; letter-spacing:.4px; margin-bottom:3px; }
+.g-val { font-size:19px; font-family:var(--mono); font-weight:500;
+  color:var(--teal); letter-spacing:-1px; }
+.g-max { font-size:9.5px; color:var(--text3); margin-top:1px; font-family:var(--mono); }
+
+/* Mimicry panel */
+.jog-axis-row { display:grid; grid-template-columns:70px 1fr 1fr; align-items:center; gap:6px; }
+.jog-lbl { font-size:11.5px; font-family:var(--mono); color:var(--text2); }
+.keyframe-list { max-height:100px; overflow-y:auto; margin-top:8px; }
+.kf-item { display:flex; align-items:center; gap:8px; padding:5px 8px;
+  background:var(--surface2); border:1px solid var(--border);
+  border-radius:var(--r); margin-bottom:4px; font-size:11.5px; font-family:var(--mono); }
+.kf-num { color:var(--text3); min-width:20px; }
+
+/* Right panel */
+.timer-big { font-size:34px; font-family:var(--mono); font-weight:500;
+  letter-spacing:-2px; text-align:center; padding:4px 0; }
+.reps-grid { display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:10px; }
+.reps-box { background:var(--surface2); border:1px solid var(--border);
+  border-radius:var(--r); padding:10px; text-align:center; }
+.reps-lbl { font-size:9.5px; font-family:var(--mono); color:var(--text3);
+  text-transform:uppercase; letter-spacing:.4px; }
+.reps-val { font-size:22px; font-family:var(--mono); font-weight:600; margin-top:3px; }
+
+/* Effort arc */
+.effort-wrap { position:relative; width:148px; height:148px; margin:8px auto; }
+.effort-center { position:absolute; inset:0; display:flex; flex-direction:column;
+  align-items:center; justify-content:center; pointer-events:none; }
+.e-pct { font-size:26px; font-weight:600; font-family:var(--mono); letter-spacing:-1px; }
+.e-sub { font-size:9.5px; font-family:var(--mono); color:var(--text3);
+  text-transform:uppercase; letter-spacing:.5px; }
+
+/* Video */
+.video-wrap { background:#000; border-radius:var(--r-lg); overflow:hidden;
+  aspect-ratio:16/9; }
+.video-wrap video, .video-wrap iframe { width:100%; height:100%; border:none; }
+.vid-row { display:flex; gap:5px; flex-wrap:wrap; margin-top:8px; }
+.vid-btn { font-size:11.5px; padding:4px 9px; border-radius:var(--r);
+  border:1px solid var(--border2); background:var(--surface);
+  color:var(--text2); cursor:pointer; transition:all .12s; font-family:var(--font); }
+.vid-btn.on { background:var(--teal-light); color:var(--teal-dark); border-color:var(--teal); }
+
+/* Mimicry modal */
+.mim-step { display:flex; gap:12px; align-items:flex-start; padding:12px 0;
+  border-bottom:1px solid var(--border); }
+.mim-step:last-child { border-bottom:none; }
+.mim-step-num { width:26px; height:26px; border-radius:50%; background:var(--teal);
+  color:#fff; font-size:12px; font-weight:600; font-family:var(--mono);
+  display:flex; align-items:center; justify-content:center; flex-shrink:0; margin-top:1px; }
+.mim-step-text { font-size:13px; color:var(--text2); line-height:1.5; }
+.mim-step-title { font-weight:600; color:var(--text); margin-bottom:2px; }
+
+@media(max-width:1060px){ .therapy-layout{grid-template-columns:1fr} }
+@media(max-width:680px) { .sensor-row{grid-template-columns:1fr}
+  .rom-live{grid-template-columns:1fr 1fr} }
+</style>
+{% endblock %}
+
+{% block topbar_actions %}
+<div id="topTimer" style="font-family:var(--mono);font-size:13px;color:var(--text2);display:none">
+  &#9201; <span id="topTimerVal">00:00:00</span>
+</div>
+{% endblock %}
+
+{% block content %}
+<!-- Session bar -->
+<div class="session-bar">
+  <div>
+    <div class="sb-lbl">Patient</div>
+    <select class="form-select" id="selPat" style="min-width:150px;padding:5px 28px 5px 9px;font-size:13px" onchange="onPatChange()">
+      <option value="">Select patient&#8230;</option>
+    </select>
+  </div>
+  <div>
+    <div class="sb-lbl">Affected Leg</div>
+    <div class="leg-toggle">
+      <button class="leg-btn on" id="legR" onclick="setLeg('right')">Right</button>
+      <button class="leg-btn"    id="legL" onclick="setLeg('left')">Left</button>
+    </div>
+  </div>
+  <div>
+    <div class="sb-lbl">Mode</div>
+    <div class="mode-tabs">
+      <button class="mode-tab on" onclick="setMode('passive',this)">Passive CPM</button>
+      <button class="mode-tab"    onclick="setMode('active',this)">Active-Assist</button>
+      <button class="mode-tab"    onclick="setMode('mimicry',this)">Mimicry</button>
+    </div>
+  </div>
+  <div style="margin-left:auto;display:flex;gap:7px;align-items:center">
+    <button class="btn btn-amber btn-sm" onclick="goAttachPos()" title="Move to cuff attachment position">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><polyline points="10 17 15 12 10 7"/><line x1="15" y1="12" x2="3" y2="12"/></svg>
+      Attach Position
+    </button>
+    <button class="btn btn-ghost btn-sm" onclick="goHome()">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>
+      Home
+    </button>
+  </div>
+</div>
+
+<div class="therapy-layout">
+
+  <!-- ══ LEFT ══ -->
+  <div class="therapy-left">
+
+    <!-- 1. Session control -->
+    <div class="card card-sm">
+      <div class="card-header">
+        <span class="card-title">Session Control</span>
+        <span class="badge badge-gray" id="statusBadge">No session</span>
+      </div>
+      <div class="ctrl-row">
+        <button class="btn btn-primary" id="btnStart" onclick="startSession()">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+          Start
+        </button>
+        <button class="btn btn-ghost" id="btnPause" onclick="pauseSession()" disabled>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg>
+          Pause
+        </button>
+        <button class="btn btn-ghost" id="btnStop" onclick="stopSession()" disabled>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/></svg>
+          Stop
+        </button>
+        <div style="flex:1"></div>
+        <button class="btn-big-resume" id="bigResume" onclick="doResume()">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+          Resume
+        </button>
+        <button class="btn-big-estop" onclick="doEStop()">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><rect x="9" y="9" width="6" height="6"/></svg>
+          E-STOP
+        </button>
+      </div>
+    </div>
+
+    <!-- 2. EMG + FSR (sensors first) -->
+    <div class="sensor-row">
+      <!-- EMG -->
+      <div class="s-card">
+        <div class="s-head">
+          <span class="card-title">EMG Signal</span>
+          <div class="s-badges">
+            <span class="badge badge-gray" id="emgRMS">RMS: 0</span>
+            <span class="badge badge-gray" id="emgGate">Gate: off</span>
+          </div>
+        </div>
+        <div style="height:110px"><canvas id="emgChart"></canvas></div>
+      </div>
+      <!-- FSR -->
+      <div class="s-card">
+        <div class="s-head">
+          <span class="card-title">Force Sensor</span>
+          <div class="s-badges">
+            <span class="badge badge-gray" id="fsrVal">FSR: 0</span>
+            <span class="badge badge-gray" id="fsrGate">Gate: off</span>
+          </div>
+        </div>
+        <div class="fsr-labels"><span>&#8592; Lift</span><span>Push &#8594;</span></div>
+        <div class="fsr-bar-wrap">
+          <div class="fsr-bar-center"></div>
+          <div id="fsrFill" class="fsr-bar-fill"></div>
+        </div>
+        <div class="intent-row">
+          <div class="i-dot" id="iDot" style="background:var(--border2)"></div>
+          <div style="flex:1">
+            <div class="i-lbl" id="iLbl">NO INTENT</div>
+            <div class="i-sub" id="iSub">Awaiting patient input</div>
+          </div>
+          <div style="font-family:var(--mono);font-size:20px;font-weight:600" id="iMag">0%</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 3. ROM live controls -->
+    <div class="card card-sm">
+      <div class="card-header">
+        <span class="card-title">ROM Targets &#8212; adjust during session</span>
+        <span class="badge badge-teal">Live</span>
+      </div>
+      <div class="rom-live">
+        <div class="rom-live-item"><div class="rll">Hip Flex Max</div>
+          <div class="rom-stepper">
+            <button onclick="stepLive('rHip',-5,0,120)">&#8722;</button>
+            <span id="rHip">90&#176;</span>
+            <button onclick="stepLive('rHip',5,0,120)">&#43;</button>
+          </div></div>
+        <div class="rom-live-item"><div class="rll">Knee Flex Max</div>
+          <div class="rom-stepper">
+            <button onclick="stepLive('rKnee',-5,0,130)">&#8722;</button>
+            <span id="rKnee">90&#176;</span>
+            <button onclick="stepLive('rKnee',5,0,130)">&#43;</button>
+          </div></div>
+        <div class="rom-live-item"><div class="rll">Ab/Ad Max</div>
+          <div class="rom-stepper">
+            <button onclick="stepLive('rAbAd',-5,0,30)">&#8722;</button>
+            <span id="rAbAd">25&#176;</span>
+            <button onclick="stepLive('rAbAd',5,0,30)">&#43;</button>
+          </div></div>
+        <div class="rom-live-item"><div class="rll">Speed (&#176;/s)</div>
+          <div class="rom-stepper">
+            <button onclick="stepLive('rSpd',-1,1,15)">&#8722;</button>
+            <span id="rSpd">5&#176;/s</span>
+            <button onclick="stepLive('rSpd',1,1,15)">&#43;</button>
+          </div></div>
+        <div class="rom-live-item"><div class="rll">Reps Target</div>
+          <div class="rom-stepper">
+            <button onclick="stepLive('rReps',-5,1,100)">&#8722;</button>
+            <span id="rReps">10</span>
+            <button onclick="stepLive('rReps',5,1,100)">&#43;</button>
+          </div></div>
+        <div class="rom-live-item"><div class="rll">Pain Score (0&#8211;10)</div>
+          <div class="rom-stepper">
+            <button onclick="stepLive('rPain',-1,0,10)">&#8722;</button>
+            <span id="rPain">0</span>
+            <button onclick="stepLive('rPain',1,0,10)">&#43;</button>
+          </div></div>
+      </div>
+    </div>
+
+    <!-- 4. Motor angles -->
+    <div class="card card-sm">
+      <div class="card-header">
+        <span class="card-title">Motor Positions</span>
+        <div style="display:flex;gap:6px">
+          <span class="badge badge-teal">20 Hz</span>
+          <span class="badge badge-gray" id="homeBadge">Not homed</span>
+        </div>
+      </div>
+      <div class="gauge-strip">
+        <div class="gauge">
+          <div class="gauge-bar" id="gb1" style="width:0%"></div>
+          <div class="g-lbl">M1 Ab/Ad</div>
+          <div class="g-val" id="gv1">0.00</div>
+          <div class="g-max">&#177;30&#176;</div>
+        </div>
+        <div class="gauge">
+          <div class="gauge-bar" id="gb2" style="width:0%"></div>
+          <div class="g-lbl">M2 Hip</div>
+          <div class="g-val" id="gv2">0.00</div>
+          <div class="g-max">0&#8211;115&#176;</div>
+        </div>
+        <div class="gauge">
+          <div class="gauge-bar" id="gb3" style="width:0%"></div>
+          <div class="g-lbl">M3 Knee</div>
+          <div class="g-val" id="gv3">0.00</div>
+          <div class="g-max">0&#8211;125&#176;</div>
+        </div>
+        <div class="gauge">
+          <div class="gauge-bar" id="gb4" style="width:0%"></div>
+          <div class="g-lbl">M4 Align</div>
+          <div class="g-val" id="gv4">0.00</div>
+          <div class="g-max">auto</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 5. Mimicry jog panel (hidden unless in mimicry mode) -->
+    <div class="card card-sm" id="mimicryPanel" style="display:none">
+      <div class="card-header">
+        <span class="card-title">Mimicry &#8212; Jog Axes</span>
+        <div style="display:flex;gap:7px">
+          <span class="badge badge-gray" id="kfCount">0 keyframes</span>
+          <button class="btn btn-primary btn-sm" onclick="saveKeyframe()">Save Keyframe</button>
+        </div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:6px;margin-bottom:10px">
+        <div style="font-size:10.5px;color:var(--text3);font-family:var(--mono)">Each button press = 1&#176; step. Jog the arm to the desired position, then save a keyframe.</div>
+        <!-- M1 -->
+        <div class="jog-axis-row">
+          <span class="jog-lbl">M1 Ab/Ad</span>
+          <button class="btn btn-ghost btn-sm" onclick="jogAxis(1,-119)">&#9664; &#8722;1&#176;</button>
+          <button class="btn btn-ghost btn-sm" onclick="jogAxis(1,119)">&#43;1&#176; &#9654;</button>
+        </div>
+        <!-- M2 -->
+        <div class="jog-axis-row">
+          <span class="jog-lbl">M2 Hip</span>
+          <button class="btn btn-ghost btn-sm" onclick="jogAxis(2,-119)">&#9664; &#8722;1&#176;</button>
+          <button class="btn btn-ghost btn-sm" onclick="jogAxis(2,119)">&#43;1&#176; &#9654;</button>
+        </div>
+        <!-- M3 -->
+        <div class="jog-axis-row">
+          <span class="jog-lbl">M3 Knee</span>
+          <button class="btn btn-ghost btn-sm" onclick="jogAxis(3,-119)">&#9664; &#8722;1&#176;</button>
+          <button class="btn btn-ghost btn-sm" onclick="jogAxis(3,119)">&#43;1&#176; &#9654;</button>
+        </div>
+        <!-- M4 -->
+        <div class="jog-axis-row">
+          <span class="jog-lbl">M4 Align</span>
+          <button class="btn btn-ghost btn-sm" onclick="jogAxis(4,-119)">&#9664; &#8722;1&#176;</button>
+          <button class="btn btn-ghost btn-sm" onclick="jogAxis(4,119)">&#43;1&#176; &#9654;</button>
+        </div>
+      </div>
+      <!-- Saved keyframes list -->
+      <div class="card-title" style="margin-bottom:6px">Saved Keyframes</div>
+      <div class="keyframe-list" id="kfList">
+        <div style="color:var(--text3);font-size:12px;text-align:center;padding:8px">No keyframes yet. Jog the arm and press Save.</div>
+      </div>
+      <div style="display:flex;gap:7px;margin-top:8px">
+        <button class="btn btn-primary btn-sm" id="btnReplay" onclick="startReplay()" disabled>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"/></svg>
+          Start Replay
+        </button>
+        <button class="btn btn-danger btn-sm" onclick="clearKeyframes()">Clear All</button>
+      </div>
+    </div>
+
+  </div><!-- /left -->
+
+  <!-- ══ RIGHT ══ -->
+  <div class="therapy-right">
+
+    <!-- Timer -->
+    <div class="card card-sm" style="text-align:center">
+      <div class="card-title" style="margin-bottom:4px">Session Timer</div>
+      <div class="timer-big" id="bigTimer">00:00:00</div>
+      <div class="reps-grid">
+        <div class="reps-box">
+          <div class="reps-lbl">Reps Done</div>
+          <div class="reps-val" style="color:var(--teal)" id="repsDone">0</div>
+        </div>
+        <div class="reps-box">
+          <div class="reps-lbl">Target</div>
+          <div class="reps-val" style="color:var(--text2)" id="repsTarget">10</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Effort arc -->
+    <div class="card card-sm">
+      <div class="card-header">
+        <span class="card-title">Effort Distribution</span>
+        <span class="badge badge-gray" id="effortMode">Passive</span>
+      </div>
+      <div class="effort-wrap">
+        <canvas id="effortArc" width="148" height="148"></canvas>
+        <div class="effort-center">
+          <div class="e-pct" id="ePct" style="color:var(--green)">0</div>
+          <div class="e-sub">Patient %</div>
+        </div>
+      </div>
+      <div style="display:flex;justify-content:space-around;margin-top:4px">
+        <div style="text-align:center">
+          <div style="font-size:9.5px;font-family:var(--mono);color:var(--text3);text-transform:uppercase">Patient</div>
+          <div style="font-size:20px;font-family:var(--mono);font-weight:600;color:var(--green)" id="ePat">0%</div>
+        </div>
+        <div style="text-align:center">
+          <div style="font-size:9.5px;font-family:var(--mono);color:var(--text3);text-transform:uppercase">Robot</div>
+          <div style="font-size:20px;font-family:var(--mono);font-weight:600;color:var(--teal)" id="eRob">100%</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Video -->
+    <div class="card card-sm">
+      <div class="card-header"><span class="card-title">Patient Entertainment</span></div>
+      <div class="video-wrap" id="vidWrap">
+        <div style="width:100%;height:100%;display:flex;align-items:center;justify-content:center;color:#888;font-size:13px">Select a video</div>
+      </div>
+      <div class="vid-row" id="vidBtns">
+        <button class="vid-btn" onclick="document.getElementById('ytIn').focus()">&#9654; YouTube</button>
+      </div>
+      <div style="display:flex;gap:6px;margin-top:6px">
+        <input type="text" class="form-input" id="ytIn" placeholder="Paste YouTube URL&#8230;" style="font-size:12px">
+        <button class="btn btn-ghost btn-sm" onclick="playYT()">Play</button>
+      </div>
+    </div>
+
+  </div><!-- /right -->
+</div>
+
+<!-- ═══ MIMICRY INTRO MODAL ════════════════════════════════════════════ -->
+<div class="modal-bg" id="modalMimicry">
+  <div class="modal">
+    <div class="modal-title">Mimicry Mode &#8212; Teach &amp; Replay</div>
+    <div class="modal-sub">Before starting the session, please read the workflow below.</div>
+
+    <div style="display:flex;flex-direction:column;gap:0">
+      <div class="mim-step">
+        <div class="mim-step-num">1</div>
+        <div class="mim-step-text">
+          <div class="mim-step-title">Attach the cuff</div>
+          Press <strong>Attach Position</strong> to move the arm to a safe spread position, then attach the cuff to the patient's leg.
+        </div>
+      </div>
+      <div class="mim-step">
+        <div class="mim-step-num">2</div>
+        <div class="mim-step-text">
+          <div class="mim-step-title">Jog the arm</div>
+          Use the axis jog buttons (&#9664; &#9654; per axis) to move the arm to each desired position. Each press moves 1&#176;.
+        </div>
+      </div>
+      <div class="mim-step">
+        <div class="mim-step-num">3</div>
+        <div class="mim-step-text">
+          <div class="mim-step-title">Save keyframes</div>
+          Press <strong>Save Keyframe</strong> after each position. Build up a sequence of at least 2 keyframes to define the path.
+        </div>
+      </div>
+      <div class="mim-step">
+        <div class="mim-step-num">4</div>
+        <div class="mim-step-text">
+          <div class="mim-step-title">Start Replay</div>
+          Once your path is ready, press <strong>Start Replay</strong>. The robot will smoothly interpolate between your keyframes and repeat the path for the configured number of repetitions.
+        </div>
+      </div>
+    </div>
+
+    <div style="background:var(--amber-light);border:1px solid rgba(217,119,6,.3);border-radius:var(--r);padding:10px 14px;margin-top:14px;font-size:13px;color:var(--amber)">
+      &#9888;&#65039; Always keep one hand near the E-STOP button while jogging. Move slowly and verify patient comfort at each keyframe.
+    </div>
+
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="cancelMimicry()">Cancel</button>
+      <button class="btn btn-primary" onclick="confirmMimicry()">
+        Understood &#8212; Open Jog Panel
+      </button>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+/* ── State ──────────────────────────────────────────────────────────── */
+var _sid = null, _running = false, _paused = false;
+var _tStart = null, _tInterval = null;
+var _reps = 0;
+var _leg = 'right', _mode = 'passive';
+var _patId = sessionStorage.getItem('sid_patient');
+var _keyframes = [];
+var _pendingMimicry = false;
+
+/* ── EMG chart ──────────────────────────────────────────────────────── */
+var BUFSZ   = 150;
+var emgBuf  = [];
+for (var i = 0; i < BUFSZ; i++) emgBuf.push(0);
+
+var emgCtx  = document.getElementById('emgChart').getContext('2d');
+var emgChart = new Chart(emgCtx, {
+  type: 'line',
+  data: {
+    labels: emgBuf.map(function() { return ''; }),
+    datasets: [{
+      data: emgBuf,
+      borderColor: '#0d9488', borderWidth: 1.5,
+      fill: true, backgroundColor: 'rgba(13,148,136,.08)',
+      pointRadius: 0, tension: 0.3
+    }]
+  },
+  options: {
+    responsive: true, maintainAspectRatio: false, animation: false,
+    plugins: { legend: { display: false } },
+    scales: {
+      x: { display: false },
+      y: { min: 0, max: 1023, display: true,
+           ticks: { font: { family: 'DM Mono', size: 9 }, color: '#94a3b8', maxTicksLimit: 4 },
+           grid: { color: 'rgba(128,128,128,0.08)' } }
+    }
+  }
+});
+
+/* ── Effort arc ─────────────────────────────────────────────────────── */
+var arcCtx = document.getElementById('effortArc').getContext('2d');
+function drawArc(pp) {
+  var c = arcCtx; c.clearRect(0,0,148,148);
+  var cx=74,cy=78,r=54,sw=11;
+  var s=-Math.PI*1.1, e=Math.PI*0.1, total=e-s;
+  c.beginPath(); c.arc(cx,cy,r,s,e); c.strokeStyle='#e2e8f0';
+  c.lineWidth=sw; c.lineCap='round'; c.stroke();
+  var pEnd = s + total * Math.max(0, Math.min(100, pp)) / 100;
+  if (pp > 0) {
+    c.beginPath(); c.arc(cx,cy,r,s,pEnd);
+    c.strokeStyle='#16a34a'; c.lineWidth=sw; c.lineCap='round'; c.stroke();
+  }
+  if (pp < 100) {
+    c.beginPath(); c.arc(cx,cy,r,pEnd,e);
+    c.strokeStyle='#0d9488'; c.lineWidth=sw; c.lineCap='round'; c.stroke();
+  }
+}
+drawArc(0);
+
+/* ── Init ───────────────────────────────────────────────────────────── */
+function init() {
+  loadPatients();
+  var leg  = sessionStorage.getItem('sid_leg')  || 'right';
+  var mode = sessionStorage.getItem('sid_mode') || 'passive';
+  setLeg(leg);
+  /* Find mode button and activate */
+  var modeBtns = document.querySelectorAll('.mode-tab');
+  modeBtns.forEach(function(b) {
+    if (b.getAttribute('onclick') && b.getAttribute('onclick').indexOf("'" + mode + "'") !== -1) {
+      setMode(mode, b);
+    }
+  });
+  loadVideos();
+}
+
+async function loadPatients() {
+  try {
+    var pts = await apiFetch('/api/patients');
+    var sel = document.getElementById('selPat');
+    for (var i = 0; i < pts.length; i++) {
+      var o = document.createElement('option');
+      o.value = pts[i].id;
+      o.textContent = pts[i].first_name + ' ' + pts[i].last_name;
+      sel.appendChild(o);
+    }
+    if (_patId) sel.value = _patId;
+  } catch(e) {}
+}
+
+function onPatChange() { _patId = document.getElementById('selPat').value; }
+
+/* ── Leg / Mode ─────────────────────────────────────────────────────── */
+function setLeg(side) {
+  _leg = side;
+  document.getElementById('legR').className = 'leg-btn' + (side === 'right' ? ' on' : '');
+  document.getElementById('legL').className = 'leg-btn' + (side === 'left'  ? ' on' : '');
+  sessionStorage.setItem('sid_leg', side);
+}
+
+function setMode(mode, btn) {
+  /* If switching to mimicry, show the intro modal first */
+  if (mode === 'mimicry' && _mode !== 'mimicry') {
+    _pendingMimicry = true;
+    _pendingMimicryBtn = btn;
+    openModal('modalMimicry');
+    return;
+  }
+  _applyMode(mode, btn);
+}
+
+function _applyMode(mode, btn) {
+  _mode = mode;
+  document.querySelectorAll('.mode-tab').forEach(function(b) { b.classList.remove('on'); });
+  if (btn) btn.classList.add('on');
+  document.getElementById('mimicryPanel').style.display = mode === 'mimicry' ? 'block' : 'none';
+  var em = document.getElementById('effortMode');
+  em.textContent  = mode === 'passive' ? 'Passive' : mode === 'active' ? 'Active-Assist' : 'Mimicry';
+  em.className    = 'badge badge-' + (mode === 'active' ? 'green' : mode === 'mimicry' ? 'amber' : 'gray');
+  sessionStorage.setItem('sid_mode', mode);
+}
+
+var _pendingMimicryBtn = null;
+
+function confirmMimicry() {
+  closeModal('modalMimicry');
+  _applyMode('mimicry', _pendingMimicryBtn);
+  _pendingMimicry = false;
+  toast('Mimicry mode active. Jog the arm and save keyframes.', 'info', 5000);
+}
+
+function cancelMimicry() {
+  closeModal('modalMimicry');
+  _pendingMimicry = false;
+  /* Reactivate the previously active mode tab */
+  document.querySelectorAll('.mode-tab').forEach(function(b) {
+    if (b.getAttribute('onclick') && b.getAttribute('onclick').indexOf("'" + _mode + "'") !== -1) {
+      b.classList.add('on');
+    } else {
+      b.classList.remove('on');
+    }
+  });
+}
+
+/* ── Session lifecycle ──────────────────────────────────────────────── */
+async function startSession() {
+  if (!_patId) { toast('Select a patient first.', 'warning'); return; }
+  if (_mode === 'mimicry' && _keyframes.length < 2) {
+    toast('Save at least 2 keyframes before starting replay.', 'warning');
+    return;
+  }
+  try {
+    var r = await apiFetch('/api/sessions/start', {
+      method: 'POST',
+      body: JSON.stringify({
+        patient_id:    parseInt(_patId),
+        mode:          _mode,
+        speed:         getROM('rSpd'),
+        hip_flex_max:  getROM('rHip'),
+        knee_flex_max: getROM('rKnee'),
+        reps_target:   getROM('rReps'),
+      })
+    });
+    _sid = r.session_id; _running = true; _paused = false;
+    _tStart = Date.now(); _reps = 0;
+    startTimer();
+    document.getElementById('btnStart').disabled = true;
+    document.getElementById('btnPause').disabled = false;
+    document.getElementById('btnStop').disabled  = false;
+    setBadge('green', 'Running');
+    document.getElementById('topTimer').style.display = 'flex';
+    toast('Session #' + _sid + ' started.', 'success');
+  } catch(e) {}
+}
+
+async function pauseSession() {
+  _paused = !_paused;
+  var btn = document.getElementById('btnPause');
+  if (_paused) {
+    btn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polygon points="5 3 19 12 5 21 5 3"/></svg> Resume';
+  } else {
+    btn.innerHTML = '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/></svg> Pause';
+  }
+  setBadge(_paused ? 'amber' : 'green', _paused ? 'Paused' : 'Running');
+}
+
+async function stopSession() {
+  if (!_sid) return;
+  if (!confirm('End this session?')) return;
+  try {
+    await apiFetch('/api/sessions/' + _sid + '/end', {
+      method: 'POST',
+      body: JSON.stringify({ status: 'completed', reps_done: _reps })
+    });
+    _running = false; _sid = null;
+    stopTimer();
+    document.getElementById('btnStart').disabled = false;
+    document.getElementById('btnPause').disabled = true;
+    document.getElementById('btnStop').disabled  = true;
+    setBadge('gray', 'Ended');
+    document.getElementById('topTimer').style.display = 'none';
+    toast('Session ended.', 'info');
+  } catch(e) {}
+}
+
+function setBadge(color, text) {
+  var b = document.getElementById('statusBadge');
+  b.className = 'badge badge-' + color;
+  b.textContent = text;
+}
+
+/* ── Timer ──────────────────────────────────────────────────────────── */
+function startTimer() {
+  _tInterval = setInterval(function() {
+    if (!_running || _paused) return;
+    var e = Math.floor((Date.now() - _tStart) / 1000);
+    var h = String(Math.floor(e / 3600)).padStart(2, '0');
+    var m = String(Math.floor((e % 3600) / 60)).padStart(2, '0');
+    var s = String(e % 60).padStart(2, '0');
+    var t = h + ':' + m + ':' + s;
+    document.getElementById('bigTimer').textContent      = t;
+    document.getElementById('topTimerVal').textContent   = t;
+  }, 1000);
+}
+function stopTimer() { clearInterval(_tInterval); }
+
+/* ── ROM ────────────────────────────────────────────────────────────── */
+function getROM(id) { return parseFloat(document.getElementById(id).textContent) || 0; }
+function stepLive(id, delta, min, max) {
+  var el = document.getElementById(id);
+  if (!el) return;
+  var unit = el.textContent.replace(/[\d.-]/g, '');
+  var cur  = parseFloat(el.textContent) || 0;
+  el.textContent = Math.max(min, Math.min(max, cur + delta)) + unit;
+}
+
+/* ── Motor commands ─────────────────────────────────────────────────── */
+async function goHome() {
+  try { await apiFetch('/api/therapy/home', {method:'POST'}); toast('Homing sequence started.', 'info'); }
+  catch(e) {}
+}
+async function goAttachPos() {
+  try {
+    await apiFetch('/api/therapy/angles', {method:'POST', body:JSON.stringify({angles:[15,5,0,0]})});
+    toast('Moving to attachment position\u2026', 'info');
+  } catch(e) {}
+}
+async function jogAxis(axis, steps) {
+  try { await apiFetch('/api/therapy/jog', {method:'POST', body:JSON.stringify({axis:axis, steps:steps})}); }
+  catch(e) {}
+}
+
+/* ── Keyframes ──────────────────────────────────────────────────────── */
+function saveKeyframe() {
+  /* Read current motor angles from the gauge displays */
+  var ax1 = parseFloat(document.getElementById('gv1').textContent) || 0;
+  var ax2 = parseFloat(document.getElementById('gv2').textContent) || 0;
+  var ax3 = parseFloat(document.getElementById('gv3').textContent) || 0;
+  var ax4 = parseFloat(document.getElementById('gv4').textContent) || 0;
+
+  _keyframes.push({idx: _keyframes.length, ax1:ax1, ax2:ax2, ax3:ax3, ax4:ax4});
+  renderKeyframes();
+  toast('Keyframe ' + _keyframes.length + ' saved.', 'success');
+}
+
+function renderKeyframes() {
+  var list = document.getElementById('kfList');
+  var cnt  = document.getElementById('kfCount');
+  var rBtn = document.getElementById('btnReplay');
+
+  cnt.textContent = _keyframes.length + ' keyframe' + (_keyframes.length !== 1 ? 's' : '');
+  rBtn.disabled   = _keyframes.length < 2;
+
+  if (!_keyframes.length) {
+    list.innerHTML = '<div style="color:var(--text3);font-size:12px;text-align:center;padding:8px">No keyframes yet. Jog the arm and press Save.</div>';
+    return;
+  }
+
+  var html = '';
+  for (var i = 0; i < _keyframes.length; i++) {
+    var kf = _keyframes[i];
+    html +=
+      '<div class="kf-item">' +
+      '<span class="kf-num">' + (i+1) + '</span>' +
+      '<span>M1:' + kf.ax1.toFixed(1) + '&#176;</span>' +
+      '<span>M2:' + kf.ax2.toFixed(1) + '&#176;</span>' +
+      '<span>M3:' + kf.ax3.toFixed(1) + '&#176;</span>' +
+      '<button onclick="deleteKeyframe(' + i + ')" style="margin-left:auto;border:none;background:none;color:var(--text3);cursor:pointer;font-size:14px">&#215;</button>' +
+      '</div>';
+  }
+  list.innerHTML = html;
+}
+
+function deleteKeyframe(idx) {
+  _keyframes.splice(idx, 1);
+  _keyframes.forEach(function(kf, i) { kf.idx = i; });
+  renderKeyframes();
+}
+
+function clearKeyframes() {
+  if (!_keyframes.length) return;
+  if (!confirm('Delete all ' + _keyframes.length + ' keyframes?')) return;
+  _keyframes = [];
+  renderKeyframes();
+  toast('Keyframes cleared.', 'info');
+}
+
+async function startReplay() {
+  if (_keyframes.length < 2) { toast('Need at least 2 keyframes.', 'warning'); return; }
+  toast('Replay starting\u2026', 'info');
+  document.getElementById('btnStart').click();
+}
+
+/* ── E-stop sync ────────────────────────────────────────────────────── */
+function onEstopChange(on) {
+  document.getElementById('bigResume').className = 'btn-big-resume' + (on ? ' show' : '');
+}
+
+/* ── WebSocket: sensor data ─────────────────────────────────────────── */
+window._ws.sensor = function(d) {
+  /* EMG chart */
+  emgBuf.shift(); emgBuf.push(d.emg_raw);
+  emgChart.data.datasets[0].data = emgBuf.slice();
+  emgChart.update('none');
+
+  document.getElementById('emgRMS').textContent = 'RMS: ' + Math.round(d.emg_rms);
+  var eg = document.getElementById('emgGate');
+  eg.className  = 'badge badge-' + (d.emg_gate ? 'green' : 'gray');
+  eg.textContent = 'EMG: ' + (d.emg_gate ? 'ACTIVE' : 'idle');
+
+  /* FSR bar */
+  var rest  = d.fsr_rest_raw || 300;
+  var delta = d.fsr_raw - rest;
+  var fill  = document.getElementById('fsrFill');
+  var pct   = Math.min(50, Math.abs(delta) / 350 * 50);
+  if (delta > 30) {
+    fill.style.left = '50%'; fill.style.width = pct + '%';
+    fill.style.background = 'var(--teal)';
+  } else if (delta < -30) {
+    fill.style.left = (50 - pct) + '%'; fill.style.width = pct + '%';
+    fill.style.background = 'var(--amber)';
+  } else {
+    fill.style.width = '0';
+  }
+
+  document.getElementById('fsrVal').textContent = 'FSR: ' + d.fsr_raw;
+  var fg = document.getElementById('fsrGate');
+  fg.className  = 'badge badge-' + (d.fsr_gate ? 'green' : 'gray');
+  fg.textContent = 'FSR: ' + (d.fsr_gate ? 'ACTIVE' : 'idle');
+
+  /* Intent */
+  var dir = d.intent_direction;
+  var dot = document.getElementById('iDot');
+  var lbl = document.getElementById('iLbl');
+  var sub = document.getElementById('iSub');
+  if (dir === 'PUSH') {
+    dot.style.background = 'var(--teal)';
+    lbl.textContent = 'PUSH \u2014 Flexion intent'; lbl.style.color = 'var(--teal)';
+  } else if (dir === 'LIFT') {
+    dot.style.background = 'var(--amber)';
+    lbl.textContent = 'LIFT \u2014 Extension intent'; lbl.style.color = 'var(--amber)';
+  } else {
+    dot.style.background = 'var(--border2)';
+    lbl.textContent = 'NO INTENT'; lbl.style.color = 'var(--text2)';
+  }
+  sub.textContent = d.intent_confirmed ? 'Confirmed \u2014 both gates active' : 'Below threshold';
+  document.getElementById('iMag').textContent = Math.round(d.intent_magnitude * 100) + '%';
+
+  /* Effort arc */
+  var pp = d.patient_effort_pct;
+  drawArc(pp);
+  document.getElementById('ePct').textContent = Math.round(pp);
+  document.getElementById('ePat').textContent = pp.toFixed(1) + '%';
+  document.getElementById('eRob').textContent = d.robot_effort_pct.toFixed(1) + '%';
+};
+
+/* ── WebSocket: motor angles ────────────────────────────────────────── */
+window._ws.angles = function(d) {
+  var vals = [d.ax1, d.ax2, d.ax3, d.ax4];
+  var maxs = [30, 115, 125, 45];
+  for (var i = 0; i < 4; i++) {
+    document.getElementById('gv' + (i+1)).textContent = vals[i].toFixed(2);
+    var pct = Math.min(100, Math.abs(vals[i]) / maxs[i] * 100).toFixed(1) + '%';
+    document.getElementById('gb' + (i+1)).style.width = pct;
+  }
+};
+
+/* ── Videos ─────────────────────────────────────────────────────────── */
+async function loadVideos() {
+  try {
+    var vids = await apiFetch('/api/media/videos');
+    var btns = document.getElementById('vidBtns');
+    for (var i = 0; i < vids.length; i++) {
+      (function(v) {
+        var b = document.createElement('button');
+        b.className   = 'vid-btn';
+        b.textContent = v.name.replace(/\.[^.]+$/, '');
+        b.onclick = function() {
+          document.querySelectorAll('.vid-btn').forEach(function(x) { x.classList.remove('on'); });
+          b.classList.add('on');
+          document.getElementById('vidWrap').innerHTML =
+            '<video src="' + v.url + '" controls autoplay style="width:100%;height:100%"></video>';
+        };
+        btns.prepend(b);
+      })(vids[i]);
+    }
+  } catch(e) {}
+}
+
+function playYT() {
+  var raw = document.getElementById('ytIn').value.trim();
+  var m   = raw.match(/(?:v=|youtu\.be\/)([A-Za-z0-9_-]{11})/);
+  if (!m) { toast('Invalid YouTube URL.', 'error'); return; }
+  document.getElementById('vidWrap').innerHTML =
+    '<iframe src="https://www.youtube.com/embed/' + m[1] + '?autoplay=1" allow="autoplay" allowfullscreen></iframe>';
+}
+
+/* ── Boot ───────────────────────────────────────────────────────────── */
+init();
+</script>
+{% endblock %}

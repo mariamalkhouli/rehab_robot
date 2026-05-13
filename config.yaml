@@ -1,0 +1,417 @@
+# =============================================================================
+#  REHAB ROBOT — MASTER CONFIGURATION FILE
+#  /home/pi/rehab_robot/config.yaml
+#
+#  This is the single source of truth for every tunable parameter.
+#  No hardcoded values anywhere else in the codebase.
+#
+#  HOW TO USE:
+#    - Values marked [MEASURE] must be updated once mechanical assembly is done.
+#    - Values marked [TUNE]   must be adjusted during clinical calibration.
+#    - Values marked [FIXED]  are based on your purchased hardware specs.
+#    - Values marked [SW]     are software/logic parameters — change carefully.
+# =============================================================================
+
+
+# -----------------------------------------------------------------------------
+# SYSTEM
+# General system-level settings
+# -----------------------------------------------------------------------------
+system:
+  device_name: "Rehab Robot v1.0"      # Displayed on dashboard header
+  log_level: "INFO"                     # DEBUG | INFO | WARNING | ERROR | CRITICAL
+  log_file: "logs/app.log"             # Relative to project root
+  log_max_bytes: 5242880               # 5 MB max log file size before rotation
+  log_backup_count: 3                  # Number of rotated log files to keep
+  timezone: "Africa/Cairo"             # [SW] Used for timestamping sessions
+
+
+# -----------------------------------------------------------------------------
+# SERIAL COMMUNICATION — Raspberry Pi <-> Arduino Mega
+# -----------------------------------------------------------------------------
+serial:
+  port: "/dev/ttyUSB0"                 # [MEASURE] Check with: ls /dev/tty*
+                                        # Could also be /dev/ttyACM0
+                                        # Run: dmesg | grep tty  after plugging in
+  baud_rate: 115200                    # [FIXED] Must match Arduino Serial.begin()
+  timeout_sec: 1.0                     # [SW] Serial read timeout in seconds
+  handshake_retries: 5                 # [SW] How many times to retry on startup
+  handshake_delay_sec: 2.0            # [SW] Wait time between retries
+  handshake_token: "RPI_READY"        # [SW] String Pi sends to Mega on startup
+  handshake_ack: "MEGA_READY"         # [SW] String Mega replies with
+  send_rate_hz: 5                     # [SW] Max angle packet send rate (Hz)
+  receive_rate_hz: 100                 # [SW] Sensor data receive rate (Hz)
+                                        #      Must match Arduino timer interrupt
+
+
+# -----------------------------------------------------------------------------
+# SAFETY MONITOR — ESP32-C3 Wireless E-Stop
+# -----------------------------------------------------------------------------
+safety:
+  heartbeat_ip: "0.0.0.0"             # [SW] Listen on all interfaces
+  heartbeat_port: 5005                 # [SW] UDP port — must match ESP32 firmware
+  heartbeat_interval_ms: 50           # [SW] How often ESP32 sends a beat (ms)
+                                        #      Must match ESP32 firmware
+  heartbeat_timeout_ms: 3600000           # [SW] If heartbeat STOPS after ESP32 was connected
+                                        #      Keep at 2x heartbeat_interval_ms minimum
+  estop_recovery_delay_sec: 2.0       # [SW] Minimum wait after E-stop before
+                                        #      system can be re-armed
+  require_home_after_estop: true      # [SW] Force re-homing before next session
+                                        #      after any E-stop event
+
+
+# -----------------------------------------------------------------------------
+# MOTORS — NEMA 23 + DM566 Driver + 26.67:1 Worm Gearbox
+# All 4 axes share the same motor/driver/gearbox model.
+# -----------------------------------------------------------------------------
+motors:
+  # --- Hardware specs [FIXED] ---
+  steps_per_rev: 200                   # [FIXED] NEMA 23 KH56KM2U198 = 1.8°/step
+  microstepping: 8                     # [FIXED] DM566 dip switch setting
+                                        # Options: 1,2,4,8,16,32 — check DM566 manual
+                                        # Current: SW1=OFF SW2=ON SW3=OFF (verify)
+  gear_ratio: 26.67                    # [FIXED] Worm gearbox reduction ratio
+  steps_per_degree: 118.52            # [FIXED] = (steps_per_rev × microstepping
+                                        #           × gear_ratio) / 360
+                                        # = (200 × 8 × 26.67) / 360 = 118.52
+                                        # DO NOT change — derived from above 3 values
+
+  # --- Motion limits [TUNE] ---
+  max_speed_steps_per_sec: 2000       # [TUNE] AccelStepper maxSpeed()
+                                        # Start low (500), increase during testing
+  max_accel_steps_per_sec2: 1000      # [TUNE] AccelStepper setAcceleration()
+                                        # Affects smoothness vs responsiveness
+  min_speed_steps_per_sec: 50         # [SW] Minimum speed to prevent stalling
+  home_speed_steps_per_sec: 300       # [TUNE] Slow speed used during homing sequence
+  home_accel_steps_per_sec2: 200      # [TUNE] Acceleration during homing
+
+  # --- Per-axis motor direction [MEASURE] ---
+  # Set to 1 or -1 depending on how motor is physically mounted
+  # Verify by commanding +10 degrees and checking direction with protractor
+  ax1_direction: 1                     # [MEASURE] Hip Abduction/Adduction axis
+  ax2_direction: 1                     # [MEASURE] Hip Flexion/Extension axis
+  ax3_direction: 1                     # [MEASURE] Knee Flexion/Extension axis
+  ax4_direction: 1                     # [MEASURE] 4th axis (define once mechanical done)
+
+  # --- Axis labels (for logging and dashboard display) ---
+  ax1_label: "Hip Ab/Ad"
+  ax2_label: "Hip Flex/Ext"
+  ax3_label: "Knee Flex/Ext"
+  ax4_label: "Axis 4"                  # [MEASURE] Update once mechanical is defined
+
+
+# -----------------------------------------------------------------------------
+# JOINT LIMITS — Hard anatomical boundaries
+# These are the absolute software limits. The physical limit switches are the
+# backup. Both must agree — set software limits ~5° inside the switch positions.
+# -----------------------------------------------------------------------------
+joints:
+  hip_ab_ad:                           # Axis 1 — Hip Abduction / Adduction
+    min_deg: -30.0                     # [MEASURE] Adduction limit (negative = adduction)
+    max_deg: 30.0                      # [MEASURE] Abduction limit
+    safe_min_deg: -25.0               # [TUNE]    Software clamp — 5° inside hard limit
+    safe_max_deg: 25.0                # [TUNE]    Software clamp — 5° inside hard limit
+    home_deg: 0.0                      # [MEASURE] Neutral/home position in degrees
+
+  hip_flex_ext:                        # Axis 2 — Hip Flexion / Extension
+    min_deg: 0.0                       # [MEASURE] Full extension (neutral standing)
+    max_deg: 120.0                     # [MEASURE] Full flexion
+    safe_min_deg: 2.0                 # [TUNE]    Software clamp
+    safe_max_deg: 115.0               # [TUNE]    Software clamp
+    home_deg: 0.0                      # [MEASURE] Neutral/home position
+
+  knee_flex_ext:                       # Axis 3 — Knee Flexion / Extension
+    min_deg: 0.0                       # [MEASURE] Full extension
+    max_deg: 130.0                     # [MEASURE] Full flexion
+    safe_min_deg: 2.0                 # [TUNE]    Software clamp
+    safe_max_deg: 125.0               # [TUNE]    Software clamp
+    home_deg: 0.0                      # [MEASURE] Neutral/home position
+
+  axis4:                               # Axis 4 — Define after mechanical design
+    min_deg: -45.0                     # [MEASURE] Placeholder
+    max_deg: 45.0                      # [MEASURE] Placeholder
+    safe_min_deg: -40.0               # [TUNE]    Placeholder
+    safe_max_deg: 40.0                # [TUNE]    Placeholder
+    home_deg: 0.0                      # [MEASURE] Placeholder
+
+
+# -----------------------------------------------------------------------------
+# LIMIT SWITCHES — 8x Mechanical Endstops
+# Mapping of which switch corresponds to which axis and direction.
+# These are read by the Arduino and trigger a hard halt in firmware.
+# The Pi also monitors these via the sensor packet.
+# -----------------------------------------------------------------------------
+limit_switches:
+  # Switch index in the S: packet from Arduino (0-indexed)
+  ax1_min_index: 0                     # [MEASURE] Hip Ab/Ad — minimum travel switch
+  ax1_max_index: 1                     # [MEASURE] Hip Ab/Ad — maximum travel switch
+  ax2_min_index: 2                     # [MEASURE] Hip Flex/Ext — minimum travel switch
+  ax2_max_index: 3                     # [MEASURE] Hip Flex/Ext — maximum travel switch
+  ax3_min_index: 4                     # [MEASURE] Knee Flex/Ext — minimum travel switch
+  ax3_max_index: 5                     # [MEASURE] Knee Flex/Ext — maximum travel switch
+  ax4_min_index: 6                     # [MEASURE] Axis 4 — minimum travel switch
+  ax4_max_index: 7                     # [MEASURE] Axis 4 — maximum travel switch
+  active_state: 0                      # [MEASURE] 0 = triggered when LOW (NC switches)
+                                        #           1 = triggered when HIGH (NO switches)
+                                        # NC (Normally Closed) is safer — wire accordingly
+
+
+# -----------------------------------------------------------------------------
+# SENSORS — 1x FSR + 1x sEMG
+#
+# Both sensors are mounted on the leg cuff and wired to the Arduino Mega.
+# Nothing is connected directly to the Raspberry Pi.
+#
+# FSR PLACEMENT: Below the cuff, against the leg.
+#   - Patient pushes leg DOWN  → FSR reading INCREASES above rest baseline
+#   - Patient lifts leg UP     → FSR reading DECREASES below rest baseline
+#   - Robot uses BOTH directions to detect movement intent
+#
+# sEMG PLACEMENT: On the cuff (exact muscle TBD after mechanical assembly).
+#   - Detects muscle activation regardless of direction
+#   - Used alongside FSR in the Truth-Check AND gate
+#   - Placement will be updated in emg_placement_note after assembly
+# -----------------------------------------------------------------------------
+sensors:
+  # --- Sampling ---
+  sample_rate_hz: 100                  # [SW]    Must match Arduino timer interrupt rate
+  emg_rms_window_samples: 50          # [SW]    Rolling window for RMS calculation
+                                        #         At 100Hz this = 500ms window
+
+  # --- FSR (Force Sensitive Resistor) ---
+  # Single FSR on the leg cuff. Raw ADC values from Arduino (10-bit = 0 to 1023).
+  fsr_pin: 0                           # [FIXED] Arduino analog pin A0
+  fsr_min_raw: 0                       # [FIXED] ADC minimum (no contact)
+  fsr_max_raw: 1023                    # [FIXED] ADC maximum
+
+  fsr_rest_raw: 300                    # [TUNE]  ADC reading when leg rests naturally
+                                        #         in the cuff with NO intentional push
+                                        #         or lift. Measure by placing cuff on
+                                        #         relaxed leg and reading ADC.
+                                        #         Typically 200–400 depending on cuff
+                                        #         tightness and patient weight.
+                                        #         THIS IS THE NEUTRAL BASELINE.
+
+  fsr_push_threshold: 150             # [TUNE]  ADC units ABOVE fsr_rest_raw that
+                                        #         count as a downward push (flexion).
+                                        #         Intent detected when:
+                                        #         fsr_raw > (fsr_rest_raw + fsr_push_threshold)
+                                        #         Increase to reduce false push triggers.
+                                        #         Decrease if pushes are not detected.
+
+  fsr_lift_threshold: 100             # [TUNE]  ADC units BELOW fsr_rest_raw that
+                                        #         count as an upward lift (extension).
+                                        #         Intent detected when:
+                                        #         fsr_raw < (fsr_rest_raw - fsr_lift_threshold)
+                                        #         Typically smaller than push threshold
+                                        #         since lifting reduces force more subtly.
+                                        #         Increase to reduce false lift triggers.
+
+  fsr_max_delta_raw: 600              # [TUNE]  Maximum expected ADC delta from rest
+                                        #         in either push or lift direction.
+                                        #         Used to map force magnitude to assist
+                                        #         speed. (fsr_rest_raw + fsr_max_delta_raw)
+                                        #         must not exceed 1023.
+
+  # --- sEMG (Surface Electromyography) ---
+  # Single dry electrode sEMG module V1.2.1 on the leg cuff.
+  # Raw ADC values from Arduino (10-bit = 0 to 1023).
+  emg_pin: 1                           # [FIXED] Arduino analog pin A1
+  emg_min_raw: 0                       # [FIXED] ADC minimum
+  emg_max_raw: 1023                    # [FIXED] ADC maximum
+
+  emg_threshold: 80                   # [TUNE]  Minimum RMS value to confirm muscle
+                                        #         activation. Start at 80, calibrate
+                                        #         per patient. Decrease for weak muscles,
+                                        #         increase if getting noise triggers.
+
+  emg_max_rms: 500                    # [TUNE]  Expected RMS during strong contraction.
+                                        #         Used to normalize patient effort % to
+                                        #         0–100 scale for the analytics dashboard.
+                                        #         Calibrate by asking patient to contract
+                                        #         maximally and reading the peak RMS.
+
+  emg_placement_note: "TBD"           # [MEASURE] Update after mechanical assembly.
+                                        #           e.g. "Quadriceps, 10cm above patella"
+                                        #           Stored for clinical record keeping.
+
+  # --- Truth-Check logic (AND gate) ---
+  # For active-assistive mode to trigger, BOTH must be true simultaneously:
+  #   1. FSR detects intentional force change (push OR lift beyond threshold)
+  #   2. EMG detects muscle activation above emg_threshold
+  # This prevents false assists from accidental pressure or EMG noise alone.
+  require_both_sensors: true          # [SW]  true  = AND logic (recommended, safer)
+                                        #       false = OR logic (FSR alone triggers)
+                                        #       Only set false during sensor testing.
+
+
+# -----------------------------------------------------------------------------
+# PASSIVE MODE (CPM — Continuous Passive Motion)
+# -----------------------------------------------------------------------------
+passive_mode:
+  default_speed_deg_per_sec: 5.0      # [TUNE] Angular velocity during CPM
+                                        # Typical clinical range: 2–10 deg/sec
+  min_speed_deg_per_sec: 1.0          # [SW]  Minimum allowed CPM speed
+  max_speed_deg_per_sec: 15.0         # [SW]  Maximum allowed CPM speed
+  default_rom_percent: 80.0           # [TUNE] % of patient's set ROM to use
+                                        # e.g. if ROM is 0–90°, at 80% = 0–72°
+  ramp_up_degrees: 10.0               # [TUNE] Degrees over which to accelerate
+                                        # at start of each sweep (smooth start)
+  ramp_down_degrees: 10.0             # [TUNE] Degrees before end to decelerate
+  hold_time_at_limits_ms: 500         # [TUNE] Pause at each end of range (ms)
+                                        # 0 = no pause, continuous motion
+  trajectory_points: 200              # [SW]  Number of points in one sweep path
+                                        # More points = smoother motion
+
+
+# -----------------------------------------------------------------------------
+# ACTIVE-ASSISTIVE MODE (Admittance Control)
+# -----------------------------------------------------------------------------
+active_mode:
+  control_loop_hz: 5                  # [SW]  How fast the assist loop runs (Hz)
+  min_assist_speed_deg_per_sec: 2.0   # [TUNE] Minimum speed when assisting
+  max_assist_speed_deg_per_sec: 20.0  # [TUNE] Maximum speed when assisting
+                                        # FSR force magnitude mapped between min/max
+  position_hold_tolerance_deg: 0.5    # [TUNE] If no intent, hold within this band
+  intent_debounce_ms: 50              # [TUNE] Intent signal must be stable for
+                                        # this long before assist activates.
+                                        # Prevents jitter/noise false triggers.
+  assist_ramp_up_ms: 200              # [TUNE] Time to ramp from 0 to target speed
+                                        # when assist kicks in (smooth start)
+  assist_ramp_down_ms: 300            # [TUNE] Time to ramp down when intent lost
+
+
+# -----------------------------------------------------------------------------
+# MIMICRY MODE (Teach & Replay)
+# -----------------------------------------------------------------------------
+mimicry_mode:
+  jog_step_size_deg: 1.0              # [TUNE] Degrees per jog button press
+  jog_speed_deg_per_sec: 10.0         # [TUNE] Speed during manual jogging
+  max_keyframes_per_path: 100         # [SW]  Maximum keyframes in one path
+  interpolation_steps: 50             # [SW]  Intermediate points between keyframes
+  replay_speed_multiplier: 1.0        # [SW]  Default speed multiplier (1.0 = normal)
+  min_replay_speed: 0.25              # [SW]  Minimum replay speed multiplier
+  max_replay_speed: 2.0               # [SW]  Maximum replay speed multiplier
+
+
+# -----------------------------------------------------------------------------
+# KINEMATICS
+# -----------------------------------------------------------------------------
+kinematics:
+  ax1_mechanical_offset_deg: 0.0      # [MEASURE] Hip Ab/Ad zero alignment offset
+  ax2_mechanical_offset_deg: 0.0      # [MEASURE] Hip Flex/Ext zero alignment offset
+  ax3_mechanical_offset_deg: 0.0      # [MEASURE] Knee Flex/Ext zero alignment offset
+  ax4_mechanical_offset_deg: 0.0      # [MEASURE] Axis 4 zero alignment offset
+  thigh_length_mm: 420.0             # [MEASURE] Greater trochanter to knee joint
+  shank_length_mm: 380.0             # [MEASURE] Knee joint to ankle joint
+  cuff_compensation_factor: 0.5      # [TUNE]    M4 = -(M2+M3) × k
+                                      #           0.5 = starting value. Tune by placing
+                                      #           cuff on test object and checking it
+                                      #           stays perpendicular to shank at all angles.
+
+
+# -----------------------------------------------------------------------------
+# ANALYTICS
+# -----------------------------------------------------------------------------
+analytics:
+  effort_smoothing_window: 10         # [SW]  Sessions to average for trend graphs
+  min_session_duration_sec: 30        # [SW]  Sessions shorter than this are excluded
+  robot_effort_formula: "rms_ratio"   # [SW]  "rms_ratio" = EMG RMS based calculation
+  pain_scale_max: 10                  # [FIXED] VAS pain scale 0–10
+  rom_improvement_threshold_deg: 5.0  # [TUNE] Minimum ROM gain for clinical significance
+
+
+# -----------------------------------------------------------------------------
+# FLASK WEB SERVER
+# -----------------------------------------------------------------------------
+flask:
+  host: "0.0.0.0"
+  port: 5000
+  debug: false
+  secret_key: "CHANGE_THIS_TO_A_LONG_RANDOM_STRING_BEFORE_DEPLOYMENT"
+  websocket_ping_interval: 25
+  websocket_ping_timeout: 60
+  max_content_length_mb: 16
+
+
+# -----------------------------------------------------------------------------
+# WEBSOCKET STREAMING
+# -----------------------------------------------------------------------------
+websocket:
+  sensor_stream_rate_hz: 20
+  angle_stream_rate_hz: 20
+  buffer_size: 200
+
+
+# -----------------------------------------------------------------------------
+# DATABASE
+# -----------------------------------------------------------------------------
+database:
+  path: "rehab.db"
+  wal_mode: true
+  session_log_batch_size: 50
+  session_log_flush_interval_sec: 1.0
+
+
+# -----------------------------------------------------------------------------
+# CALIBRATION
+# -----------------------------------------------------------------------------
+calibration:
+  homing_sequence: [3, 2, 1, 4]
+  homing_backoff_deg: 2.0
+  homing_timeout_sec: 30.0
+  require_homing_on_startup: true
+  require_homing_after_estop: true
+
+
+# -----------------------------------------------------------------------------
+# NETWORK
+# -----------------------------------------------------------------------------
+network:
+  wifi_ssid: ""
+  dashboard_url_hint: "http://rehabrobot.local:5000"
+  allow_remote_access: true
+
+
+# -----------------------------------------------------------------------------
+# HARDWARE PIN MAPPING — Arduino Mega
+# -----------------------------------------------------------------------------
+arduino_pins:
+  # Analog inputs — both sensors on the leg cuff
+  fsr: "A0"                            # [FIXED] Single FSR on leg cuff
+  emg: "A1"                            # [FIXED] Single sEMG module on leg cuff
+
+  # Limit switches — digital inputs with INPUT_PULLUP
+  ls_ax1_min: 2
+  ls_ax1_max: 3
+  ls_ax2_min: 4
+  ls_ax2_max: 5
+  ls_ax3_min: 6
+  ls_ax3_max: 7
+  ls_ax4_min: 8
+  ls_ax4_max: 9
+
+  # Stepper motor step/dir pins
+  ax1_step: 22
+  ax1_dir: 23
+  ax2_step: 24
+  ax2_dir: 25
+  ax3_step: 26
+  ax3_dir: 27
+  ax4_step: 28
+  ax4_dir: 29
+
+  # Enable pin — shared across all DM566 drivers
+  enable_pin: 30                       # [MEASURE] ENA pin (active LOW on DM566)
+
+
+# -----------------------------------------------------------------------------
+# ESP32-C3 FIRMWARE PARAMETERS (reference only — not read by Python)
+# -----------------------------------------------------------------------------
+esp32_reference:
+  wifi_ssid: "Mariam iPhone"         # [MEASURE]
+  wifi_password: "YOUR_WIFI_PASSWORD" # [MEASURE]
+  pi_ip: "192.168.X.X"               # [MEASURE] Pi's static IP on your network
+  target_port: 5005                    # [FIXED]  Must match safety.heartbeat_port
+  heartbeat_interval_ms: 50           # [FIXED]  Must match safety.heartbeat_interval_ms
+  heartbeat_payload: "HB"             # [FIXED]  Must match ESP32 firmware string

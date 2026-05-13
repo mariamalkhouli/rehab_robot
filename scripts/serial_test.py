@@ -1,0 +1,26 @@
+import serial
+import time
+
+# Find the port: usually /dev/ttyACM0 or /dev/ttyUSB0
+try:
+    ser = serial.Serial('/dev/ttyUSB0', 115200, timeout=1)
+    print("Connected to Arduino Mega!")
+except:
+    print("Failed to connect. Check USB cable or Port name.")
+    exit()
+
+time.sleep(2) # Wait for Arduino to reset
+
+while True:
+    # Send a test command to the Arduino
+    command = "<PASSIVE, 45.0, 30.0, 0.0, 0.0, 10>\n"
+    ser.write(command.encode())
+    print(f"Sent to Mega: {command.strip()}")
+    
+    # Read response back from Mega
+    if ser.in_waiting > 0:
+        line = ser.readline().decode('utf-8').rstrip()
+        print(f"Received from Mega: {line}")
+    
+    time.sleep(1) # Send every 1 second
+

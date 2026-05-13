@@ -1,0 +1,907 @@
+{% extends "base.html" %}
+{% set active_page = 'therapy' %}
+
+{% block title %}3D Visualizer{% endblock %}
+{% block breadcrumb %}Visualizer{% endblock %}
+
+{% block extra_head %}
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<style>
+/* ── Visualizer layout ─────────────────────────────────────────────── */
+.viz-layout {
+  display               : grid;
+  grid-template-columns : 1fr 300px;
+  gap                   : 16px;
+  height                : calc(100vh - var(--header-h) - 56px);
+}
+
+.viz-canvas-wrap {
+  background    : var(--bg-card);
+  border        : 1px solid var(--border);
+  border-radius : var(--radius-md);
+  overflow      : hidden;
+  position      : relative;
+}
+
+#vizCanvas {
+  width   : 100% !important;
+  height  : 100% !important;
+  display : block;
+}
+
+/* Canvas overlay labels */
+.canvas-overlay {
+  position      : absolute;
+  top           : 14px;
+  left          : 14px;
+  pointer-events: none;
+}
+
+.canvas-overlay-title {
+  font-family   : var(--font-mono);
+  font-size     : 11px;
+  color         : var(--text-muted);
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+}
+
+.canvas-side-badge {
+  display       : inline-flex;
+  align-items   : center;
+  gap           : 6px;
+  margin-top    : 6px;
+  padding       : 4px 10px;
+  background    : var(--teal-dim);
+  border        : 1px solid rgba(0,212,200,0.2);
+  border-radius : var(--radius-sm);
+  font-family   : var(--font-mono);
+  font-size     : 10px;
+  color         : var(--teal);
+  letter-spacing: 0.06em;
+}
+
+.canvas-coords {
+  position      : absolute;
+  bottom        : 14px;
+  left          : 14px;
+  pointer-events: none;
+}
+
+.coord-row {
+  font-family   : var(--font-mono);
+  font-size     : 11px;
+  color         : var(--text-muted);
+  line-height   : 1.8;
+}
+
+.coord-val { color: var(--text-secondary); }
+
+/* ── Right panel ──────────────────────────────────────────────────── */
+.viz-panel {
+  display        : flex;
+  flex-direction : column;
+  gap            : 12px;
+  overflow-y     : auto;
+}
+
+/* Joint angle display */
+.angle-block {
+  background    : var(--bg-card);
+  border        : 1px solid var(--border);
+  border-radius : var(--radius-md);
+  overflow      : hidden;
+}
+
+.angle-item {
+  display        : flex;
+  align-items    : center;
+  gap            : 12px;
+  padding        : 12px 16px;
+  border-bottom  : 1px solid var(--border);
+}
+
+.angle-item:last-child { border-bottom: none; }
+
+.angle-axis-tag {
+  font-family   : var(--font-mono);
+  font-size     : 10px;
+  font-weight   : 600;
+  color         : var(--text-inverse);
+  background    : var(--text-muted);
+  width         : 26px;
+  height        : 26px;
+  border-radius : var(--radius-sm);
+  display       : flex;
+  align-items   : center;
+  justify-content: center;
+  flex-shrink   : 0;
+}
+
+.angle-axis-tag.ax1 { background: var(--blue); }
+.angle-axis-tag.ax2 { background: var(--teal); }
+.angle-axis-tag.ax3 { background: var(--purple); }
+.angle-axis-tag.ax4 { background: var(--text-muted); }
+
+.angle-info { flex: 1; min-width: 0; }
+
+.angle-joint-name {
+  font-size   : 11px;
+  color       : var(--text-secondary);
+  white-space : nowrap;
+  overflow    : hidden;
+  text-overflow: ellipsis;
+}
+
+.angle-value-wrap {
+  display     : flex;
+  flex-direction: column;
+  align-items : flex-end;
+  gap         : 4px;
+}
+
+.angle-value {
+  font-family : var(--font-mono);
+  font-size   : 18px;
+  font-weight : 400;
+  color       : var(--text-primary);
+  line-height : 1;
+}
+
+.angle-arc {
+  width         : 48px;
+  height        : 4px;
+  background    : var(--bg-elevated);
+  border-radius : 2px;
+  overflow      : hidden;
+}
+
+.angle-arc-fill {
+  height        : 100%;
+  border-radius : 2px;
+  transition    : width 0.15s ease;
+}
+
+/* FK result display */
+.fk-block {
+  background    : var(--bg-card);
+  border        : 1px solid var(--border);
+  border-radius : var(--radius-md);
+}
+
+.fk-point {
+  display     : flex;
+  align-items : center;
+  gap         : 10px;
+  padding     : 10px 16px;
+  border-bottom: 1px solid var(--border);
+}
+
+.fk-point:last-child { border-bottom: none; }
+
+.fk-dot {
+  width         : 10px;
+  height        : 10px;
+  border-radius : 50%;
+  flex-shrink   : 0;
+}
+
+.fk-label {
+  font-family : var(--font-mono);
+  font-size   : 11px;
+  color       : var(--text-muted);
+  width       : 48px;
+}
+
+.fk-coords {
+  font-family : var(--font-mono);
+  font-size   : 11px;
+  color       : var(--text-secondary);
+  flex        : 1;
+}
+
+.fk-reach {
+  font-family : var(--font-mono);
+  font-size   : 10px;
+  color       : var(--text-muted);
+}
+
+/* Controls */
+.control-block {
+  background    : var(--bg-card);
+  border        : 1px solid var(--border);
+  border-radius : var(--radius-md);
+}
+
+.control-row {
+  display       : flex;
+  align-items   : center;
+  gap           : 10px;
+  padding       : 10px 16px;
+  border-bottom : 1px solid var(--border);
+}
+
+.control-row:last-child { border-bottom: none; }
+
+.control-label {
+  font-size   : 11px;
+  color       : var(--text-muted);
+  font-family : var(--font-mono);
+  width       : 70px;
+  flex-shrink : 0;
+}
+
+input[type=range].viz-slider {
+  flex             : 1;
+  -webkit-appearance: none;
+  height           : 3px;
+  background       : var(--bg-elevated);
+  border-radius    : 2px;
+  outline          : none;
+  cursor           : pointer;
+}
+
+input[type=range].viz-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width         : 14px;
+  height        : 14px;
+  border-radius : 50%;
+  background    : var(--teal);
+  cursor        : pointer;
+  box-shadow    : 0 0 8px var(--teal-glow);
+}
+
+.slider-val {
+  font-family : var(--font-mono);
+  font-size   : 12px;
+  color       : var(--text-primary);
+  width       : 38px;
+  text-align  : right;
+}
+
+/* Toggle buttons */
+.toggle-row {
+  display : flex;
+  gap     : 6px;
+  padding : 10px 16px;
+}
+
+.toggle-btn {
+  flex          : 1;
+  padding       : 6px;
+  background    : var(--bg-elevated);
+  border        : 1px solid var(--border);
+  border-radius : var(--radius-sm);
+  font-family   : var(--font-mono);
+  font-size     : 10px;
+  color         : var(--text-muted);
+  cursor        : pointer;
+  text-align    : center;
+  transition    : all var(--t-fast);
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.toggle-btn.active {
+  background   : var(--teal-dim);
+  border-color : rgba(0,212,200,0.3);
+  color        : var(--teal);
+}
+</style>
+{% endblock %}
+
+{% block content %}
+
+<div class="page-header flex items-center justify-between" style="margin-bottom:16px;">
+  <div>
+    <h1 class="page-title">3D Kinematics Visualizer</h1>
+    <p class="page-subtitle">Real-time leg position — driven by live motor angles</p>
+  </div>
+  <div class="flex gap-2 items-center">
+    <div class="live-badge" id="vizLiveBadge" style="opacity:0.4;">
+      <div class="live-dot"></div> LIVE
+    </div>
+    <button class="btn btn-ghost btn-sm" onclick="resetCamera()">Reset Camera</button>
+    <select class="form-control" id="sideSelect" style="width:110px;padding:6px 10px;font-size:12px;" onchange="setSide(this.value)">
+      <option value="right">Right Leg</option>
+      <option value="left">Left Leg</option>
+    </select>
+  </div>
+</div>
+
+<div class="viz-layout">
+
+  <!-- 3D Canvas -->
+  <div class="viz-canvas-wrap">
+    <canvas id="vizCanvas"></canvas>
+
+    <div class="canvas-overlay">
+      <div class="canvas-overlay-title">End-Effector Robot</div>
+      <div class="canvas-side-badge" id="sideBadge">RIGHT LEG</div>
+    </div>
+
+    <div class="canvas-coords">
+      <div class="coord-row">Hip &nbsp;&nbsp;: <span class="coord-val">0, 0, 0 mm</span></div>
+      <div class="coord-row">Knee : <span class="coord-val" id="coordKnee">–</span></div>
+      <div class="coord-row">Cuff : <span class="coord-val" id="coordCuff">–</span></div>
+      <div class="coord-row" style="margin-top:4px;">
+        Reach: <span class="coord-val" id="coordReach">–</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- Right panel -->
+  <div class="viz-panel">
+
+    <!-- Joint Angles -->
+    <div class="angle-block">
+      <div class="card-header">
+        <span class="card-title">Joint Angles</span>
+        <div class="live-badge" style="font-size:10px;" id="angleLive">
+          <div class="live-dot" style="width:5px;height:5px;"></div> LIVE
+        </div>
+      </div>
+
+      <div class="angle-item">
+        <div class="angle-axis-tag ax1">A1</div>
+        <div class="angle-info">
+          <div class="angle-joint-name">Hip Abduction/Adduction</div>
+          <div class="angle-arc">
+            <div class="angle-arc-fill" id="arc1" style="width:50%;background:var(--blue);"></div>
+          </div>
+        </div>
+        <div class="angle-value-wrap">
+          <div class="angle-value"><span id="val1">0.0</span>°</div>
+        </div>
+      </div>
+
+      <div class="angle-item">
+        <div class="angle-axis-tag ax2">A2</div>
+        <div class="angle-info">
+          <div class="angle-joint-name">Hip Flexion/Extension</div>
+          <div class="angle-arc">
+            <div class="angle-arc-fill" id="arc2" style="width:0%;background:var(--teal);"></div>
+          </div>
+        </div>
+        <div class="angle-value-wrap">
+          <div class="angle-value"><span id="val2">0.0</span>°</div>
+        </div>
+      </div>
+
+      <div class="angle-item">
+        <div class="angle-axis-tag ax3">A3</div>
+        <div class="angle-info">
+          <div class="angle-joint-name">Knee Flexion/Extension</div>
+          <div class="angle-arc">
+            <div class="angle-arc-fill" id="arc3" style="width:0%;background:var(--purple);"></div>
+          </div>
+        </div>
+        <div class="angle-value-wrap">
+          <div class="angle-value"><span id="val3">0.0</span>°</div>
+        </div>
+      </div>
+
+      <div class="angle-item" style="opacity:0.4;">
+        <div class="angle-axis-tag ax4">A4</div>
+        <div class="angle-info">
+          <div class="angle-joint-name">Axis 4 (Not Used)</div>
+          <div class="angle-arc"><div class="angle-arc-fill" style="width:0%;background:var(--text-muted);"></div></div>
+        </div>
+        <div class="angle-value-wrap">
+          <div class="angle-value">0.0°</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- FK Positions -->
+    <div class="fk-block">
+      <div class="card-header"><span class="card-title">Position (mm)</span></div>
+      <div class="fk-point">
+        <div class="fk-dot" style="background:var(--amber);"></div>
+        <span class="fk-label">Hip</span>
+        <span class="fk-coords">0, 0, 0</span>
+      </div>
+      <div class="fk-point">
+        <div class="fk-dot" style="background:var(--teal);"></div>
+        <span class="fk-label">Knee</span>
+        <span class="fk-coords" id="fkKnee">–</span>
+      </div>
+      <div class="fk-point">
+        <div class="fk-dot" style="background:var(--purple);"></div>
+        <span class="fk-label">Cuff</span>
+        <span class="fk-coords" id="fkCuff">–</span>
+      </div>
+      <div class="fk-point">
+        <div class="fk-dot" style="background:var(--text-muted); opacity:0.4;"></div>
+        <span class="fk-label">Reach</span>
+        <span class="fk-coords" id="fkReach">–</span>
+        <span class="fk-reach" id="fkReachPct">–</span>
+      </div>
+    </div>
+
+    <!-- Manual Sliders (for testing when hardware not connected) -->
+    <div class="control-block">
+      <div class="card-header">
+        <span class="card-title">Manual Pose (Test)</span>
+        <button class="btn btn-ghost btn-sm" onclick="setLiveMode()" id="liveModeBtn">
+          Use Live
+        </button>
+      </div>
+
+      <div class="toggle-row">
+        <button class="toggle-btn active" onclick="setPose('home')" id="poseHome">Home</button>
+        <button class="toggle-btn" onclick="setPose('flex90')"  id="poseFlex">Flex 90°</button>
+        <button class="toggle-btn" onclick="setPose('abduct')"  id="poseAbduct">Abduct</button>
+        <button class="toggle-btn" onclick="setPose('slr')"     id="poseSLR">SLR</button>
+      </div>
+
+      <div class="control-row">
+        <span class="control-label">Hip Ab/Ad</span>
+        <input type="range" class="viz-slider" id="slAx1" min="-15" max="30" value="0" step="0.5" oninput="onSlider()">
+        <span class="slider-val" id="slAx1Val">0°</span>
+      </div>
+      <div class="control-row">
+        <span class="control-label">Hip Flex</span>
+        <input type="range" class="viz-slider" id="slAx2" min="0" max="120" value="0" step="0.5" oninput="onSlider()">
+        <span class="slider-val" id="slAx2Val">0°</span>
+      </div>
+      <div class="control-row">
+        <span class="control-label">Knee Flex</span>
+        <input type="range" class="viz-slider" id="slAx3" min="0" max="130" value="0" step="0.5" oninput="onSlider()">
+        <span class="slider-val" id="slAx3Val">0°</span>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+{% endblock %}
+
+
+{% block extra_scripts %}
+<script>
+/* ======================================================================
+   THREE.JS 3D VISUALIZER
+   ====================================================================== */
+
+const THIGH_MM = 420;
+const SHANK_MM = 380;
+const SCALE    = 0.004;   // mm → Three.js units (1 unit ≈ 250mm)
+
+let scene, camera, renderer, animId;
+let hipSphere, kneeSphere, cuffSphere;
+let thighLine, shankLine;
+let bedPlane, gridHelper;
+let currentSide   = 'right';
+let isLiveMode    = true;
+let currentAngles = [0, 0, 0, 0];
+
+/* ── Init ───────────────────────────────────────────────────────────── */
+function initThree() {
+  const canvas = document.getElementById('vizCanvas');
+  const wrap   = canvas.parentElement;
+
+  renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
+  renderer.setPixelRatio(window.devicePixelRatio);
+  renderer.shadowMap.enabled = true;
+  renderer.setClearColor(0x080c14, 1);
+
+  scene  = new THREE.Scene();
+  scene.fog = new THREE.FogExp2(0x080c14, 0.08);
+
+  // Camera — positioned to the side and above, looking at the hip
+  camera = new THREE.PerspectiveCamera(45, 1, 0.01, 100);
+  camera.position.set(3.5, 2.5, 3.5);
+  camera.lookAt(0, -0.5, 0);
+
+  // ── Lights ────────────────────────────────────────────────────────
+  const ambientLight = new THREE.AmbientLight(0x1a2638, 3.0);
+  scene.add(ambientLight);
+
+  const keyLight = new THREE.DirectionalLight(0x00d4c8, 1.5);
+  keyLight.position.set(3, 5, 3);
+  keyLight.castShadow = true;
+  scene.add(keyLight);
+
+  const fillLight = new THREE.PointLight(0x3b82f6, 1.0, 20);
+  fillLight.position.set(-3, 2, -2);
+  scene.add(fillLight);
+
+  // ── Bed surface (subtle) ──────────────────────────────────────────
+  const bedGeo  = new THREE.PlaneGeometry(6, 3);
+  const bedMat  = new THREE.MeshLambertMaterial({
+    color     : 0x0d1422,
+    transparent: true,
+    opacity   : 0.8,
+    side      : THREE.DoubleSide,
+  });
+  bedPlane = new THREE.Mesh(bedGeo, bedMat);
+  bedPlane.rotation.x = Math.PI / 2;
+  bedPlane.position.y = -0.01;
+  bedPlane.receiveShadow = true;
+  scene.add(bedPlane);
+
+  // Grid on bed
+  gridHelper = new THREE.GridHelper(6, 24, 0x1a2638, 0x111927);
+  gridHelper.position.y = 0;
+  scene.add(gridHelper);
+
+  // ── Coordinate axis indicators ─────────────────────────────────────
+  addAxisArrows();
+
+  // ── Joint spheres ──────────────────────────────────────────────────
+  // Hip — amber/gold
+  hipSphere = createSphere(0.08, 0xf59e0b);
+  hipSphere.position.set(0, 0, 0);
+  scene.add(hipSphere);
+
+  // Knee — teal
+  kneeSphere = createSphere(0.065, 0x00d4c8);
+  scene.add(kneeSphere);
+
+  // Cuff — purple
+  cuffSphere = createSphere(0.05, 0xa855f7);
+  scene.add(cuffSphere);
+
+  // ── Limb segments (updated every frame) ───────────────────────────
+  thighLine = createLimb(0x00d4c8, 0.022);   // teal — thigh
+  shankLine = createLimb(0xa855f7, 0.018);   // purple — shank
+  scene.add(thighLine);
+  scene.add(shankLine);
+
+  // ── Glow rings at joints ───────────────────────────────────────────
+  addGlowRing(hipSphere,  0xf59e0b, 0.12);
+  addGlowRing(kneeSphere, 0x00d4c8, 0.10);
+  addGlowRing(cuffSphere, 0xa855f7, 0.08);
+
+  // ── Mouse orbit ────────────────────────────────────────────────────
+  setupOrbit(canvas);
+
+  // ── Resize handler ────────────────────────────────────────────────
+  const ro = new ResizeObserver(() => resizeRenderer());
+  ro.observe(wrap);
+  resizeRenderer();
+
+  // ── Start render loop ──────────────────────────────────────────────
+  animate();
+}
+
+function createSphere(r, color) {
+  const geo  = new THREE.SphereGeometry(r, 16, 16);
+  const mat  = new THREE.MeshPhongMaterial({
+    color,
+    emissive    : color,
+    emissiveIntensity: 0.3,
+    shininess   : 80,
+  });
+  return new THREE.Mesh(geo, mat);
+}
+
+function createLimb(color, radius) {
+  // Use CylinderGeometry, repositioned each frame
+  const geo = new THREE.CylinderGeometry(radius, radius, 1, 10);
+  const mat = new THREE.MeshPhongMaterial({
+    color,
+    emissive         : color,
+    emissiveIntensity: 0.15,
+    transparent      : true,
+    opacity          : 0.85,
+  });
+  return new THREE.Mesh(geo, mat);
+}
+
+function addGlowRing(parent, color, size) {
+  const geo  = new THREE.RingGeometry(size, size * 1.4, 24);
+  const mat  = new THREE.MeshBasicMaterial({
+    color, side: THREE.DoubleSide, transparent: true, opacity: 0.25
+  });
+  const ring = new THREE.Mesh(geo, mat);
+  ring.rotation.x = Math.PI / 2;
+  parent.add(ring);
+}
+
+function addAxisArrows() {
+  const origin = new THREE.Vector3(0, 0, 0);
+  const len    = 0.6;
+  const headLen= 0.08;
+  const headW  = 0.04;
+
+  const axes = [
+    { dir: new THREE.Vector3(1,0,0), color: 0xff4444, label: '+X (Head)' },
+    { dir: new THREE.Vector3(0,1,0), color: 0x44ff44, label: '+Y (Up)' },
+    { dir: new THREE.Vector3(0,0,1), color: 0x4488ff, label: '+Z (Lateral)' },
+  ];
+
+  axes.forEach(({dir, color}) => {
+    const arrow = new THREE.ArrowHelper(dir, origin, len, color, headLen, headW);
+    scene.add(arrow);
+  });
+}
+
+/* ── Cylinder between two 3D points ─────────────────────────────────── */
+function positionLimb(limb, p1, p2) {
+  const dir    = new THREE.Vector3().subVectors(p2, p1);
+  const length = dir.length();
+  const midpt  = new THREE.Vector3().addVectors(p1, p2).multiplyScalar(0.5);
+
+  limb.position.copy(midpt);
+  limb.scale.y = length;
+
+  // Rotate cylinder to align with direction
+  const axis  = new THREE.Vector3(0, 1, 0);
+  const angle = Math.acos(axis.dot(dir.clone().normalize()));
+  const cross = new THREE.Vector3().crossVectors(axis, dir.normalize());
+
+  if (cross.length() > 0.001) {
+    limb.setRotationFromAxisAngle(cross.normalize(), angle);
+  }
+}
+
+/* ── Forward kinematics (JS mirror of Python) ────────────────────────── */
+function fkJS(ax1, ax2, ax3, side) {
+  const L1   = THIGH_MM * SCALE;
+  const L2   = SHANK_MM * SCALE;
+  const sign = (side === 'right') ? 1 : -1;
+
+  const θab  = ax1 * Math.PI / 180;
+  const θhip = ax2 * Math.PI / 180;
+  const θkn  = ax3 * Math.PI / 180;
+
+  // Sagittal plane
+  const xKnee = L1 * Math.sin(θhip);
+  const yKnee = -L1 * Math.cos(θhip);
+
+  const θShank = θhip - θkn;
+  const xCuff  = xKnee + L2 * Math.sin(θShank);
+  const yCuff  = yKnee - L2 * Math.cos(θShank);
+
+  // 3D with abduction
+  return {
+    hip  : new THREE.Vector3(0, 0, 0),
+    knee : new THREE.Vector3(
+      xKnee * Math.cos(θab),
+      yKnee,
+      xKnee * Math.sin(θab) * sign
+    ),
+    cuff : new THREE.Vector3(
+      xCuff * Math.cos(θab),
+      yCuff,
+      xCuff * Math.sin(θab) * sign
+    ),
+  };
+}
+
+/* ── Update scene with new angles ────────────────────────────────────── */
+function updateScene(angles) {
+  const [ax1, ax2, ax3, ax4] = angles;
+  const pts = fkJS(ax1, ax2, ax3, currentSide);
+
+  // Move joint spheres
+  kneeSphere.position.copy(pts.knee);
+  cuffSphere.position.copy(pts.cuff);
+
+  // Reposition limb cylinders
+  positionLimb(thighLine, pts.hip,  pts.knee);
+  positionLimb(shankLine, pts.knee, pts.cuff);
+
+  // Update UI panels
+  updateAngleDisplay(angles);
+  updateFKDisplay(pts, ax1, ax2, ax3);
+  updateSliders(angles);
+}
+
+function updateAngleDisplay(angles) {
+  const [ax1, ax2, ax3] = angles;
+
+  document.getElementById('val1').textContent = ax1.toFixed(1);
+  document.getElementById('val2').textContent = ax2.toFixed(1);
+  document.getElementById('val3').textContent = ax3.toFixed(1);
+
+  // Arc fill percentages
+  // Ax1: -15 to 30 range → map to 0-100%
+  document.getElementById('arc1').style.width = `${((ax1 + 15) / 45) * 100}%`;
+  document.getElementById('arc2').style.width = `${(ax2 / 120) * 100}%`;
+  document.getElementById('arc3').style.width = `${(ax3 / 130) * 100}%`;
+}
+
+function updateFKDisplay(pts, ax1, ax2, ax3) {
+  const scale = 1 / SCALE;  // convert back to mm
+
+  const kx = (pts.knee.x * scale).toFixed(0);
+  const ky = (pts.knee.y * scale).toFixed(0);
+  const kz = (pts.knee.z * scale).toFixed(0);
+
+  const cx = (pts.cuff.x * scale).toFixed(0);
+  const cy = (pts.cuff.y * scale).toFixed(0);
+  const cz = (pts.cuff.z * scale).toFixed(0);
+
+  const reach = Math.sqrt(
+    pts.cuff.x**2 + pts.cuff.y**2 + pts.cuff.z**2
+  ) * scale;
+
+  const maxReach = (THIGH_MM + SHANK_MM);
+  const pct      = ((reach / maxReach) * 100).toFixed(0);
+
+  document.getElementById('fkKnee').textContent  = `${kx}, ${ky}, ${kz}`;
+  document.getElementById('fkCuff').textContent  = `${cx}, ${cy}, ${cz}`;
+  document.getElementById('fkReach').textContent = `${reach.toFixed(0)} mm`;
+  document.getElementById('fkReachPct').textContent = `${pct}%`;
+
+  document.getElementById('coordKnee').textContent = `${kx}, ${ky}, ${kz} mm`;
+  document.getElementById('coordCuff').textContent = `${cx}, ${cy}, ${cz} mm`;
+  document.getElementById('coordReach').textContent = `${reach.toFixed(0)} mm (${pct}% reach)`;
+}
+
+function updateSliders(angles) {
+  document.getElementById('slAx1').value    = angles[0];
+  document.getElementById('slAx2').value    = angles[1];
+  document.getElementById('slAx3').value    = angles[2];
+  document.getElementById('slAx1Val').textContent = angles[0].toFixed(1) + '°';
+  document.getElementById('slAx2Val').textContent = angles[1].toFixed(1) + '°';
+  document.getElementById('slAx3Val').textContent = angles[2].toFixed(1) + '°';
+}
+
+/* ── Render loop ──────────────────────────────────────────────────────── */
+function animate() {
+  animId = requestAnimationFrame(animate);
+
+  // Gentle auto-rotation when in manual mode
+  if (!isLiveMode) {
+    // Subtle joint sphere pulse
+    const t = Date.now() * 0.001;
+    hipSphere.children[0].material.opacity  = 0.15 + 0.1 * Math.sin(t * 2);
+    kneeSphere.children[0].material.opacity = 0.15 + 0.1 * Math.sin(t * 2 + 1);
+    cuffSphere.children[0].material.opacity = 0.15 + 0.1 * Math.sin(t * 2 + 2);
+  }
+
+  renderer.render(scene, camera);
+}
+
+function resizeRenderer() {
+  const wrap = document.getElementById('vizCanvas').parentElement;
+  const w    = wrap.clientWidth;
+  const h    = wrap.clientHeight;
+  renderer.setSize(w, h);
+  camera.aspect = w / h;
+  camera.updateProjectionMatrix();
+}
+
+/* ── Orbit controls (manual mouse drag) ──────────────────────────────── */
+function setupOrbit(canvas) {
+  let isDragging = false;
+  let prevX = 0, prevY = 0;
+  let phi   = Math.PI / 4;   // vertical angle
+  let theta = Math.PI / 4;   // horizontal angle
+  let radius= 5.5;
+
+  function updateCamera() {
+    camera.position.x = radius * Math.sin(phi) * Math.cos(theta);
+    camera.position.y = radius * Math.cos(phi);
+    camera.position.z = radius * Math.sin(phi) * Math.sin(theta);
+    camera.lookAt(0, -0.5, 0);
+  }
+
+  canvas.addEventListener('mousedown', e => { isDragging = true; prevX = e.clientX; prevY = e.clientY; });
+  window.addEventListener('mouseup',   ()  => { isDragging = false; });
+  window.addEventListener('mousemove', e  => {
+    if (!isDragging) return;
+    const dx = (e.clientX - prevX) * 0.008;
+    const dy = (e.clientY - prevY) * 0.008;
+    theta -= dx;
+    phi    = Math.max(0.1, Math.min(Math.PI - 0.1, phi + dy));
+    prevX  = e.clientX;
+    prevY  = e.clientY;
+    updateCamera();
+  });
+
+  canvas.addEventListener('wheel', e => {
+    radius = Math.max(2, Math.min(10, radius + e.deltaY * 0.005));
+    updateCamera();
+    e.preventDefault();
+  }, { passive: false });
+
+  // Touch support for the 7" Pi screen
+  canvas.addEventListener('touchstart', e => {
+    isDragging = true;
+    prevX = e.touches[0].clientX;
+    prevY = e.touches[0].clientY;
+  }, { passive: true });
+  canvas.addEventListener('touchend', () => { isDragging = false; });
+  canvas.addEventListener('touchmove', e => {
+    if (!isDragging) return;
+    const dx = (e.touches[0].clientX - prevX) * 0.012;
+    const dy = (e.touches[0].clientY - prevY) * 0.012;
+    theta -= dx;
+    phi    = Math.max(0.1, Math.min(Math.PI - 0.1, phi + dy));
+    prevX  = e.touches[0].clientX;
+    prevY  = e.touches[0].clientY;
+    updateCamera();
+    e.preventDefault();
+  }, { passive: false });
+
+  // Store for resetCamera
+  window._orbitState = { phi, theta, radius, update: updateCamera };
+  window._orbitState.update = updateCamera;
+}
+
+function resetCamera() {
+  camera.position.set(3.5, 2.5, 3.5);
+  camera.lookAt(0, -0.5, 0);
+}
+
+/* ── Controls ──────────────────────────────────────────────────────────── */
+function onSlider() {
+  isLiveMode = false;
+  document.getElementById('liveModeBtn').style.opacity = '1';
+
+  const ax1 = parseFloat(document.getElementById('slAx1').value);
+  const ax2 = parseFloat(document.getElementById('slAx2').value);
+  const ax3 = parseFloat(document.getElementById('slAx3').value);
+
+  document.getElementById('slAx1Val').textContent = ax1.toFixed(1) + '°';
+  document.getElementById('slAx2Val').textContent = ax2.toFixed(1) + '°';
+  document.getElementById('slAx3Val').textContent = ax3.toFixed(1) + '°';
+
+  updateScene([ax1, ax2, ax3, 0]);
+  document.getElementById('vizLiveBadge').style.opacity = '0.4';
+}
+
+function setPose(name) {
+  isLiveMode = false;
+  document.getElementById('liveModeBtn').style.opacity = '1';
+  document.getElementById('vizLiveBadge').style.opacity = '0.4';
+
+  const poses = {
+    home  : [0, 0, 0, 0],
+    flex90: [0, 90, 58.5, 0],     // 90° hip, 65% coupling → 58.5° knee
+    abduct: [25, 15, 0, 0],       // 25° abduction with 15° hip preflex
+    slr   : [0, 45, 0, 0],        // 45° SLR — knee locked at 0°
+  };
+
+  const poseNames = ['poseHome', 'poseFlex', 'poseAbduct', 'poseSLR'];
+  const poseKeys  = ['home', 'flex90', 'abduct', 'slr'];
+  poseNames.forEach((id, i) => {
+    document.getElementById(id).classList.toggle('active', poseKeys[i] === name);
+  });
+
+  const angles = poses[name] || [0,0,0,0];
+  currentAngles = angles;
+  updateScene(angles);
+  updateSliders(angles);
+}
+
+function setSide(side) {
+  currentSide = side;
+  document.getElementById('sideBadge').textContent = side.toUpperCase() + ' LEG';
+  updateScene(currentAngles);
+}
+
+function setLiveMode() {
+  isLiveMode = true;
+  document.getElementById('liveModeBtn').style.opacity = '0.4';
+  document.getElementById('vizLiveBadge').style.opacity = '1';
+
+  // Clear all pose active states
+  ['poseHome','poseFlex','poseAbduct','poseSLR'].forEach(id => {
+    document.getElementById(id).classList.remove('active');
+  });
+}
+
+/* ── WebSocket — receive live motor angles ─────────────────────────────── */
+liveSocket.on('motor_angles', (d) => {
+  if (!isLiveMode) return;
+
+  currentAngles = d.angles;
+  updateScene(d.angles);
+
+  document.getElementById('vizLiveBadge').style.opacity = '1';
+  document.getElementById('angleLive').style.opacity    = '1';
+});
+
+/* ── Boot ────────────────────────────────────────────────────────────────── */
+window.addEventListener('load', () => {
+  initThree();
+  updateScene([0, 0, 0, 0]);
+  document.getElementById('liveModeBtn').style.opacity = '0.4';
+});
+</script>
+{% endblock %}

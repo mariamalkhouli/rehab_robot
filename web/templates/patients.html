@@ -1,0 +1,584 @@
+{% extends "base.html" %}
+{% set active = 'patients' %}
+{% block title %}Patients — RehabOS{% endblock %}
+{% block page_title %}Patients{% endblock %}
+{% block topbar_actions %}
+  <button class="btn btn-primary btn-sm" onclick="openModal('modalAdd')">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+    Add Patient
+  </button>
+{% endblock %}
+
+{% block head %}
+<style>
+.pl-layout { display:grid; grid-template-columns:300px 1fr; gap:16px; }
+.pl-left   { display:flex; flex-direction:column; gap:10px; }
+
+.search-box {
+  display:flex; align-items:center; gap:8px;
+  background:var(--surface); border:1px solid var(--border2);
+  border-radius:var(--r); padding:8px 12px;
+}
+.search-box svg { width:15px;height:15px;color:var(--text3);flex-shrink:0; }
+.search-box input { border:none;outline:none;font-family:var(--font);
+  font-size:13.5px;color:var(--text);background:transparent;width:100%; }
+.search-box input::placeholder { color:var(--text3); }
+
+.pat-card {
+  background:var(--surface); border:1px solid var(--border);
+  border-radius:var(--r-lg); padding:12px 14px;
+  cursor:pointer; display:flex; align-items:center; gap:11px;
+  transition:border-color .14s, box-shadow .14s;
+}
+.pat-card:hover { border-color:var(--teal); }
+.pat-card.sel   {
+  border-color:var(--teal); background:var(--teal-bg);
+  box-shadow:0 0 0 3px var(--teal-light);
+}
+.p-av {
+  width:38px;height:38px;border-radius:50%;
+  background:var(--teal-light);border:1px solid var(--border);
+  display:flex;align-items:center;justify-content:center;
+  font-size:13px;font-weight:600;color:var(--teal-dark);flex-shrink:0;
+}
+.p-card-name { font-size:13.5px;font-weight:500; }
+.p-card-meta { font-size:11.5px;color:var(--text3);margin-top:1px; }
+
+/* Profile */
+.profile-panel { display:flex;flex-direction:column;gap:14px; }
+.profile-hdr {
+  background:var(--surface);border:1px solid var(--border);
+  border-radius:var(--r-lg);padding:20px;
+  display:flex;align-items:center;gap:16px;box-shadow:var(--shadow);
+}
+.profile-av {
+  width:58px;height:58px;border-radius:50%;
+  background:var(--teal-light);border:2px solid var(--teal);
+  display:flex;align-items:center;justify-content:center;
+  font-size:21px;font-weight:600;color:var(--teal-dark);flex-shrink:0;
+}
+.profile-name { font-size:19px;font-weight:600;letter-spacing:-.3px; }
+.profile-sub  { font-size:13px;color:var(--text2);margin-top:2px; }
+
+/* ROM grid */
+.rom-grid { display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-top:12px; }
+.rom-item { background:var(--surface2);border:1px solid var(--border);border-radius:var(--r);padding:12px; }
+.rom-item-lbl { font-size:10.5px;font-family:var(--mono);color:var(--text2);
+  text-transform:uppercase;letter-spacing:.4px;margin-bottom:8px; }
+
+/* Session table badges */
+.mp { font-size:10.5px;font-family:var(--mono);padding:2px 7px;border-radius:4px;font-weight:500; }
+.mp-passive { background:var(--blue-light);color:var(--blue); }
+.mp-active  { background:var(--green-light);color:var(--green); }
+.mp-mimicry { background:var(--amber-light);color:var(--amber); }
+
+.empty-state {
+  display:flex;flex-direction:column;align-items:center;
+  justify-content:center;padding:50px 20px;text-align:center;
+  color:var(--text3);
+}
+.empty-state svg { width:44px;height:44px;margin-bottom:12px;opacity:.3; }
+
+@media(max-width:860px){ .pl-layout{grid-template-columns:1fr} }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="pl-layout">
+
+  <!-- ── Patient list ── -->
+  <div class="pl-left">
+    <div class="search-box">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+      <input type="text" id="searchInput" placeholder="Search patients&#8230;" oninput="filterPatients()">
+    </div>
+    <div id="patientListEl">
+      <div class="empty-state" style="background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg)">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>
+        <div style="font-size:14px;font-weight:500;color:var(--text2)">Loading&#8230;</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Profile panel ── -->
+  <div id="profilePanel">
+    <div class="empty-state" style="background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg);padding:60px">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+      <div style="font-size:15px;font-weight:500;color:var(--text2)">Select a patient</div>
+      <p style="font-size:13px;margin-top:6px">Click a patient from the list to view their profile.</p>
+    </div>
+  </div>
+</div>
+
+<!-- ── Add Patient Modal ── -->
+<div class="modal-bg" id="modalAdd">
+  <div class="modal">
+    <div class="modal-title">Add New Patient</div>
+    <div class="modal-sub">Enter patient clinical information.</div>
+    <div style="display:flex;flex-direction:column;gap:12px">
+      <div class="g2">
+        <div class="form-group"><label class="form-label">First Name *</label><input type="text" class="form-input" id="nFirst" placeholder="Ahmed"></div>
+        <div class="form-group"><label class="form-label">Last Name *</label><input type="text" class="form-input" id="nLast" placeholder="Hassan"></div>
+      </div>
+      <div class="g2">
+        <div class="form-group"><label class="form-label">Date of Birth *</label><input type="date" class="form-input" id="nDOB"></div>
+        <div class="form-group"><label class="form-label">Gender</label>
+          <select class="form-select" id="nGender"><option value="M">Male</option><option value="F">Female</option><option value="other">Other</option></select>
+        </div>
+      </div>
+      <div class="g2">
+        <div class="form-group"><label class="form-label">Affected Side *</label>
+          <select class="form-select" id="nSide"><option value="right">Right</option><option value="left">Left</option><option value="bilateral">Bilateral</option></select>
+        </div>
+        <div class="form-group"><label class="form-label">Contact Phone</label><input type="tel" class="form-input" id="nPhone" placeholder="+20 1xx xxx xxxx"></div>
+      </div>
+      <div class="g2">
+        <div class="form-group"><label class="form-label">Weight (kg)</label><input type="number" class="form-input" id="nWeight" placeholder="70" min="20" max="200"></div>
+        <div class="form-group"><label class="form-label">Height (cm)</label><input type="number" class="form-input" id="nHeight" placeholder="170" min="100" max="220"></div>
+      </div>
+      <div class="form-group"><label class="form-label">Diagnosis *</label><input type="text" class="form-input" id="nDiag" placeholder="e.g. Post-stroke hemiplegia, Post-TKR"></div>
+      <div class="form-group"><label class="form-label">Clinical Notes</label>
+        <textarea class="form-input form-textarea" id="nNotes" rows="2" placeholder="Initial assessment, precautions&#8230;"></textarea>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('modalAdd')">Cancel</button>
+      <button class="btn btn-primary" onclick="addPatient()">Add Patient</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Edit Patient Modal ── -->
+<div class="modal-bg" id="modalEdit">
+  <div class="modal">
+    <div class="modal-title">Edit Patient</div>
+    <div class="modal-sub">Update patient clinical information.</div>
+    <input type="hidden" id="eId">
+    <div style="display:flex;flex-direction:column;gap:12px">
+      <div class="g2">
+        <div class="form-group"><label class="form-label">First Name *</label><input type="text" class="form-input" id="eFirst"></div>
+        <div class="form-group"><label class="form-label">Last Name *</label><input type="text" class="form-input" id="eLast"></div>
+      </div>
+      <div class="g2">
+        <div class="form-group"><label class="form-label">Date of Birth *</label><input type="date" class="form-input" id="eDOB"></div>
+        <div class="form-group"><label class="form-label">Gender</label>
+          <select class="form-select" id="eGender"><option value="M">Male</option><option value="F">Female</option><option value="other">Other</option></select>
+        </div>
+      </div>
+      <div class="g2">
+        <div class="form-group"><label class="form-label">Affected Side *</label>
+          <select class="form-select" id="eSide"><option value="right">Right</option><option value="left">Left</option><option value="bilateral">Bilateral</option></select>
+        </div>
+        <div class="form-group"><label class="form-label">Diagnosis *</label><input type="text" class="form-input" id="eDiag"></div>
+      </div>
+      <div class="g2">
+        <div class="form-group"><label class="form-label">Weight (kg)</label><input type="number" class="form-input" id="eWeight" min="20" max="200"></div>
+        <div class="form-group"><label class="form-label">Height (cm)</label><input type="number" class="form-input" id="eHeight" min="100" max="220"></div>
+      </div>
+      <div class="form-group"><label class="form-label">Contact Phone</label><input type="tel" class="form-input" id="ePhone"></div>
+      <div class="form-group"><label class="form-label">Clinical Notes</label>
+        <textarea class="form-input form-textarea" id="eNotes" rows="3"></textarea>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('modalEdit')">Cancel</button>
+      <button class="btn btn-primary" onclick="saveEdit()">Save Changes</button>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+var _patients   = [];
+var _selectedId = null;
+
+/* ─── safe API wrapper — shows error in toast instead of silent fail ─── */
+async function safeGet(url) {
+  try {
+    var res  = await fetch(url);
+    var json = await res.json();
+    if (json.ok) return json.data;
+    toast('API error: ' + (json.error || url), 'error');
+    return null;
+  } catch(e) {
+    toast('Network error: ' + url, 'error');
+    return null;
+  }
+}
+
+async function safePost(url, body) {
+  try {
+    var res  = await fetch(url, {
+      method: 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify(body)
+    });
+    var json = await res.json();
+    if (json.ok) return json.data;
+    toast('Error: ' + (json.error || url), 'error');
+    return null;
+  } catch(e) {
+    toast('Network error: ' + url, 'error');
+    return null;
+  }
+}
+
+async function safePatch(url, body) {
+  try {
+    var res = await fetch(url, {
+      method: 'PATCH',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify(body)
+    });
+    var json = await res.json();
+    if (json.ok) return json.data;
+    toast('Error: ' + (json.error || url), 'error');
+    return null;
+  } catch(e) {
+    toast('Network error: ' + url, 'error');
+    return null;
+  }
+}
+
+/* ─── Load all patients ─────────────────────────────────────────────── */
+async function loadAll() {
+  var data = await safeGet('/api/patients');
+  if (data === null) return;
+  _patients = data;
+  renderList(_patients);
+
+  /* If URL has /patients/123, auto-select that patient */
+  var parts = location.pathname.split('/');
+  var urlId = parts.length >= 3 ? parseInt(parts[2]) : NaN;
+  if (!isNaN(urlId)) selectPatient(urlId);
+}
+
+function renderList(pts) {
+  var el = document.getElementById('patientListEl');
+  if (!pts.length) {
+    el.innerHTML =
+      '<div class="empty-state" style="background:var(--surface);border:1px solid var(--border);border-radius:var(--r-lg)">' +
+      '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">' +
+      '<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/>' +
+      '</svg><div style="font-size:14px;font-weight:500;color:var(--text2)">No patients yet</div>' +
+      '<p style="font-size:12px;margin-top:4px">Press Add Patient to get started.</p></div>';
+    return;
+  }
+  var html = '';
+  for (var i = 0; i < pts.length; i++) {
+    var p       = pts[i];
+    var initials= p.first_name.charAt(0) + p.last_name.charAt(0);
+    var sideClr = p.affected_side === 'left' ? 'blue' : p.affected_side === 'bilateral' ? 'amber' : 'teal';
+    var sel     = _selectedId === p.id ? ' sel' : '';
+    html +=
+      '<div class="pat-card' + sel + '" id="pc-' + p.id + '" onclick="selectPatient(' + p.id + ')">' +
+      '<div class="p-av">' + initials + '</div>' +
+      '<div style="flex:1;min-width:0">' +
+      '<div class="p-card-name">' + esc(p.first_name) + ' ' + esc(p.last_name) + '</div>' +
+      '<div class="p-card-meta">' + esc(p.diagnosis || '&#8212;') + ' &middot; ' + p.affected_side + '</div>' +
+      '</div>' +
+      '<span class="badge badge-' + sideClr + '">' + p.affected_side.charAt(0).toUpperCase() + '</span>' +
+      '</div>';
+  }
+  el.innerHTML = html;
+}
+
+function filterPatients() {
+  var q = document.getElementById('searchInput').value.toLowerCase();
+  renderList(_patients.filter(function(p) {
+    return (p.first_name + ' ' + p.last_name + ' ' + (p.diagnosis || '')).toLowerCase().indexOf(q) !== -1;
+  }));
+}
+
+/* ─── Select patient and render full profile ────────────────────────── */
+async function selectPatient(id) {
+  _selectedId = id;
+
+  /* highlight list card */
+  document.querySelectorAll('.pat-card').forEach(function(c) { c.classList.remove('sel'); });
+  var card = document.getElementById('pc-' + id);
+  if (card) card.classList.add('sel');
+
+  /* show loading state in profile panel immediately */
+  document.getElementById('profilePanel').innerHTML =
+    '<div class="card" style="padding:40px;text-align:center;color:var(--text3)">' +
+    'Loading patient profile&#8230;</div>';
+
+  /* find patient in local cache */
+  var p = null;
+  for (var i = 0; i < _patients.length; i++) {
+    if (_patients[i].id === id) { p = _patients[i]; break; }
+  }
+  if (!p) {
+    /* not in cache — fetch individually */
+    p = await safeGet('/api/patients/' + id);
+    if (!p) {
+      document.getElementById('profilePanel').innerHTML =
+        '<div class="card" style="padding:40px;text-align:center;color:var(--red)">Failed to load patient.</div>';
+      return;
+    }
+  }
+
+  /* fetch sessions — empty array is fine, null means error */
+  var sessions = await safeGet('/api/patients/' + id + '/sessions');
+  if (sessions === null) sessions = [];
+
+  /* fetch effort trend for session history enrichment */
+  var effort = await safeGet('/api/analytics/' + id + '/effort?sessions=50');
+  if (effort === null) effort = [];
+
+  renderProfile(p, sessions, effort);
+}
+
+/* ─── Render complete profile panel ────────────────────────────────── */
+function renderProfile(p, sessions, effort) {
+  var dob    = new Date(p.date_of_birth);
+  var age    = Math.floor((Date.now() - dob.getTime()) / 31557600000);
+  var inits  = p.first_name.charAt(0) + p.last_name.charAt(0);
+  var gender = p.gender === 'M' ? 'Male' : p.gender === 'F' ? 'Female' : 'Other';
+  var sideClr= p.affected_side === 'left' ? 'blue' : p.affected_side === 'bilateral' ? 'amber' : 'teal';
+
+  /* ── header ── */
+  var badges =
+    '<span class="badge badge-' + sideClr + '">' + p.affected_side + ' side</span>' +
+    (p.weight_kg ? ' <span class="badge badge-gray">' + p.weight_kg + ' kg</span>' : '') +
+    (p.height_cm ? ' <span class="badge badge-gray">' + p.height_cm + ' cm</span>' : '') +
+    (p.contact_phone ? ' <span class="badge badge-gray">' + esc(p.contact_phone) + '</span>' : '');
+
+  var hdr =
+    '<div class="profile-hdr">' +
+    '<div class="profile-av">' + inits + '</div>' +
+    '<div style="flex:1">' +
+    '<div class="profile-name">' + esc(p.first_name) + ' ' + esc(p.last_name) + '</div>' +
+    '<div class="profile-sub">' + esc(p.diagnosis || '&#8212;') + ' &middot; ' + age + ' yrs &middot; ' + gender + '</div>' +
+    '<div style="display:flex;gap:7px;margin-top:8px;flex-wrap:wrap">' + badges + '</div>' +
+    '</div>' +
+    '<div style="display:flex;flex-direction:column;gap:7px;align-items:flex-end">' +
+    '<button class="btn btn-primary btn-sm" onclick="startFor(' + p.id + ',\'' + esc(p.affected_side) + '\')">' +
+    '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="width:13px;height:13px"><polygon points="5 3 19 12 5 21 5 3"/></svg>' +
+    'Start Session</button>' +
+    '<button class="btn btn-ghost btn-sm" onclick="openEditModal(' + p.id + ')">Edit Patient</button>' +
+    '</div>' +
+    '</div>';
+
+  /* ── ROM defaults
+     NOTE: ROM defaults per patient are stored in browser memory (_romDefaults)
+     because the patients table has no ROM columns. They are applied when
+     starting a session and populate the therapy page ROM steppers.
+  ── */
+  var romCard =
+    '<div class="card">' +
+    '<div class="card-header"><span class="card-title">Session ROM Defaults</span>' +
+    '<span style="font-size:12px;color:var(--text3)">Applied to new sessions — therapist adjusts live</span></div>' +
+    '<div class="rom-grid">' +
+    buildRomRow(p.id, 'hipFlex',     'Hip Flex Max',   90, 0, 120, '&#176;') +
+    buildRomRow(p.id, 'kneeFlex',    'Knee Flex Max',  90, 0, 130, '&#176;') +
+    buildRomRow(p.id, 'abAd',        'Ab/Ad Max',      25, 0,  30, '&#176;') +
+    buildRomRow(p.id, 'hipFlexMin',  'Hip Flex Min',    0, 0,  30, '&#176;') +
+    buildRomRow(p.id, 'kneeFlexMin', 'Knee Flex Min',   0, 0,  30, '&#176;') +
+    buildRomRow(p.id, 'cpmSpeed',    'CPM Speed',       5, 1,  15, '&#176;/s') +
+    '</div>' +
+    '<div style="display:flex;gap:8px;margin-top:12px">' +
+    '<button class="btn btn-primary btn-sm" onclick="toast(\'ROM defaults saved.\',\'success\')">Save Defaults</button>' +
+    '<button class="btn btn-ghost btn-sm" onclick="resetRomRow(' + p.id + ')">Reset to Standard</button>' +
+    '</div></div>';
+
+  /* ── clinical notes ── */
+  var notesCard = '';
+  if (p.notes) {
+    notesCard =
+      '<div class="card card-sm">' +
+      '<div class="card-title" style="margin-bottom:8px">Clinical Notes</div>' +
+      '<div style="font-size:13.5px;color:var(--text2);white-space:pre-line">' + esc(p.notes) + '</div>' +
+      '</div>';
+  }
+
+  /* ── session history ── */
+  var rows = '';
+  if (!sessions.length) {
+    rows = '<tr><td colspan="7" style="text-align:center;color:var(--text3);padding:20px">No sessions recorded yet</td></tr>';
+  } else {
+    /* build effort lookup by session id */
+    var effortMap = {};
+    for (var e = 0; e < effort.length; e++) {
+      effortMap[effort[e].session_id] = effort[e];
+    }
+    for (var s = 0; s < Math.min(sessions.length, 30); s++) {
+      var ss  = sessions[s];
+      var sd  = new Date(ss.start_time);
+      var dur = ss.end_time ? Math.round((new Date(ss.end_time) - sd) / 60000) + ' min' : '&#8212;';
+      var ef  = effortMap[ss.id];
+      var mc  = ss.mode === 'passive' ? 'mp-passive' : ss.mode === 'active' ? 'mp-active' : 'mp-mimicry';
+      var sc  = ss.status === 'completed' ? 'green' : ss.status === 'estopped' ? 'red' : 'amber';
+      rows +=
+        '<tr>' +
+        '<td style="font-family:var(--mono);color:var(--text3);font-size:12px">#' + ss.id + '</td>' +
+        '<td>' + sd.toLocaleDateString('en-GB') +
+        '<br><span style="font-size:11px;color:var(--text3)">' +
+        sd.toLocaleTimeString('en-GB',{hour12:false,hour:'2-digit',minute:'2-digit'}) + '</span></td>' +
+        '<td><span class="mp ' + mc + '">' + ss.mode + '</span></td>' +
+        '<td>' + dur + '</td>' +
+        '<td style="font-family:var(--mono)">' + (ef ? ef.avg_patient_effort.toFixed(1)+'%' : '&#8212;') + '</td>' +
+        '<td style="font-family:var(--mono);font-size:12px">' +
+          (ss.knee_flex_achieved != null ? 'K:' + ss.knee_flex_achieved + '&#176;' : '&#8212;') + '</td>' +
+        '<td><span class="badge badge-' + sc + '">' + ss.status + '</span></td>' +
+        '</tr>';
+    }
+  }
+
+  var sessCard =
+    '<div class="card" style="padding:0;overflow:hidden">' +
+    '<div class="card-header" style="padding:16px 20px 0">' +
+    '<span class="card-title">Session History</span>' +
+    '<span class="badge badge-gray">' + sessions.length + ' session' + (sessions.length !== 1 ? 's' : '') + '</span>' +
+    '</div>' +
+    '<div class="tbl-wrap" style="border:none;border-radius:0;margin-top:12px">' +
+    '<table><thead><tr>' +
+    '<th>#</th><th>Date</th><th>Mode</th><th>Duration</th>' +
+    '<th>Patient Effort</th><th>ROM</th><th>Status</th>' +
+    '</tr></thead><tbody>' + rows + '</tbody></table>' +
+    '</div></div>';
+
+  document.getElementById('profilePanel').innerHTML =
+    '<div class="profile-panel">' + hdr + romCard + notesCard + sessCard + '</div>';
+}
+
+/* ─── ROM stepper builder ───────────────────────────────────────────── */
+var _romDefaults = {};
+function getRD(pid, key, def) {
+  return (_romDefaults[pid] && _romDefaults[pid][key] != null) ? _romDefaults[pid][key] : def;
+}
+function setRD(pid, key, val) {
+  if (!_romDefaults[pid]) _romDefaults[pid] = {};
+  _romDefaults[pid][key] = val;
+}
+
+function buildRomRow(pid, key, label, def, min, max, unit) {
+  var val = getRD(pid, key, def);
+  var eid = 'rd-' + pid + '-' + key;
+  return '<div class="rom-item">' +
+    '<div class="rom-item-lbl">' + label + '</div>' +
+    '<div class="rom-stepper">' +
+    '<button onclick="stepRD(\'' + eid + '\',-1,' + min + ',' + max + ',' + pid + ',\'' + key + '\')">&#8722;</button>' +
+    '<span id="' + eid + '">' + val + unit + '</span>' +
+    '<button onclick="stepRD(\'' + eid + '\',1,' + min + ',' + max + ',' + pid + ',\'' + key + '\')">&#43;</button>' +
+    '</div></div>';
+}
+
+function stepRD(eid, delta, min, max, pid, key) {
+  var el = document.getElementById(eid);
+  if (!el) return;
+  var unit = el.textContent.replace(/[\d.-]/g, '');
+  var cur  = parseFloat(el.textContent) || 0;
+  var next = Math.max(min, Math.min(max, cur + delta));
+  el.textContent = next + unit;
+  setRD(pid, key, next);
+}
+
+var _romStandardDefs = {hipFlex:90,kneeFlex:90,abAd:25,hipFlexMin:0,kneeFlexMin:0,cpmSpeed:5};
+var _romStandardUnits= {hipFlex:'°',kneeFlex:'°',abAd:'°',hipFlexMin:'°',kneeFlexMin:'°',cpmSpeed:'°/s'};
+function resetRomRow(pid) {
+  Object.keys(_romStandardDefs).forEach(function(key) {
+    var el = document.getElementById('rd-' + pid + '-' + key);
+    if (el) el.textContent = _romStandardDefs[key] + _romStandardUnits[key];
+    setRD(pid, key, _romStandardDefs[key]);
+  });
+  toast('ROM reset to standard values.', 'info');
+}
+
+/* ─── Start session shortcut ────────────────────────────────────────── */
+function startFor(pid, side) {
+  sessionStorage.setItem('sid_patient', pid);
+  sessionStorage.setItem('sid_leg', side);
+  location.href = '/therapy';
+}
+
+/* ─── Edit patient modal ────────────────────────────────────────────── */
+function openEditModal(pid) {
+  var p = null;
+  for (var i = 0; i < _patients.length; i++) {
+    if (_patients[i].id === pid) { p = _patients[i]; break; }
+  }
+  if (!p) return;
+  document.getElementById('eId').value    = p.id;
+  document.getElementById('eFirst').value = p.first_name;
+  document.getElementById('eLast').value  = p.last_name;
+  document.getElementById('eDOB').value   = p.date_of_birth;
+  document.getElementById('eGender').value= p.gender || 'M';
+  document.getElementById('eSide').value  = p.affected_side;
+  document.getElementById('eDiag').value  = p.diagnosis || '';
+  document.getElementById('eWeight').value= p.weight_kg || '';
+  document.getElementById('eHeight').value= p.height_cm || '';
+  document.getElementById('ePhone').value = p.contact_phone || '';
+  document.getElementById('eNotes').value = p.notes || '';
+  openModal('modalEdit');
+}
+
+async function saveEdit() {
+  var pid   = parseInt(document.getElementById('eId').value);
+  var first = document.getElementById('eFirst').value.trim();
+  var last  = document.getElementById('eLast').value.trim();
+  var dob   = document.getElementById('eDOB').value;
+  var diag  = document.getElementById('eDiag').value.trim();
+  if (!first || !last || !dob || !diag) {
+    toast('Fill in all required fields.', 'warning'); return;
+  }
+  var result = await safePatch('/api/patients/' + pid, {
+    first_name:    first,
+    last_name:     last,
+    date_of_birth: dob,
+    gender:        document.getElementById('eGender').value,
+    affected_side: document.getElementById('eSide').value,
+    diagnosis:     diag,
+    weight_kg:     parseFloat(document.getElementById('eWeight').value) || null,
+    height_cm:     parseFloat(document.getElementById('eHeight').value) || null,
+    contact_phone: document.getElementById('ePhone').value || null,
+    notes:         document.getElementById('eNotes').value || null,
+  });
+  if (!result) return;
+  closeModal('modalEdit');
+  toast('Patient updated.', 'success');
+  await loadAll();
+  selectPatient(pid);
+}
+
+/* ─── Add patient ───────────────────────────────────────────────────── */
+async function addPatient() {
+  var first = document.getElementById('nFirst').value.trim();
+  var last  = document.getElementById('nLast').value.trim();
+  var dob   = document.getElementById('nDOB').value;
+  var diag  = document.getElementById('nDiag').value.trim();
+  if (!first || !last || !dob || !diag) {
+    toast('Fill in all required fields.', 'warning'); return;
+  }
+  var result = await safePost('/api/patients', {
+    first_name:    first,
+    last_name:     last,
+    date_of_birth: dob,
+    gender:        document.getElementById('nGender').value,
+    affected_side: document.getElementById('nSide').value,
+    weight_kg:     parseFloat(document.getElementById('nWeight').value) || null,
+    height_cm:     parseFloat(document.getElementById('nHeight').value) || null,
+    diagnosis:     diag,
+    contact_phone: document.getElementById('nPhone').value || null,
+    notes:         document.getElementById('nNotes').value || null,
+  });
+  if (!result) return;
+  closeModal('modalAdd');
+  toast('Patient added.', 'success');
+  await loadAll();
+  selectPatient(result.id);
+}
+
+/* ─── Helpers ───────────────────────────────────────────────────────── */
+function esc(s) {
+  return String(s || '')
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;')
+    .replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+/* ─── Boot ──────────────────────────────────────────────────────────── */
+loadAll();
+</script>
+{% endblock %}

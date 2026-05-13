@@ -1,0 +1,435 @@
+{% extends "base.html" %}
+{% set active = 'settings' %}
+{% block title %}Settings — RehabOS{% endblock %}
+{% block page_title %}Settings{% endblock %}
+
+{% block head %}
+<style>
+.settings-layout { display:grid; grid-template-columns:200px 1fr; gap:16px; }
+.settings-nav { display:flex; flex-direction:column; gap:2px; }
+.s-nav-item {
+  padding:9px 12px; border-radius:var(--r); font-size:13.5px; font-weight:500;
+  color:var(--text2); cursor:pointer; transition:all .12s; display:flex; align-items:center; gap:8px;
+}
+.s-nav-item:hover { background:var(--bg); color:var(--text); }
+.s-nav-item.active { background:var(--teal-light); color:var(--teal-dark); }
+.s-nav-item svg { width:15px; height:15px; flex-shrink:0; opacity:.6; }
+.s-nav-item.active svg { opacity:1; }
+.settings-section { display:none; }
+.settings-section.show { display:flex; flex-direction:column; gap:16px; }
+
+.therapist-row {
+  display:flex; align-items:center; gap:12px; padding:12px 14px;
+  border-radius:var(--r); border:1px solid var(--border); background:var(--surface2);
+}
+.t-av { width:36px; height:36px; border-radius:50%; background:var(--teal-light);
+  display:flex; align-items:center; justify-content:center;
+  font-size:13px; font-weight:600; color:var(--teal-dark); flex-shrink:0; }
+
+.config-row {
+  display:flex; align-items:flex-start; justify-content:space-between;
+  gap:16px; padding:14px 0; border-bottom:1px solid var(--border);
+}
+.config-row:last-child { border-bottom:none; }
+.config-info { flex:1; }
+.config-name  { font-size:13.5px; font-weight:500; }
+.config-desc  { font-size:12px; color:var(--text3); margin-top:2px; }
+.config-val   { font-family:var(--mono); font-size:13px; background:var(--surface2);
+  border:1px solid var(--border); border-radius:var(--r); padding:6px 10px;
+  color:var(--text); min-width:80px; text-align:center; }
+
+.calib-btn-row { display:flex; gap:10px; flex-wrap:wrap; }
+
+.sys-info-grid { display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+.sys-info-box { background:var(--surface2); border:1px solid var(--border);
+  border-radius:var(--r); padding:12px; }
+.sys-info-lbl { font-size:10px; font-family:var(--mono); color:var(--text3);
+  text-transform:uppercase; letter-spacing:.5px; margin-bottom:4px; }
+.sys-info-val { font-size:14px; font-family:var(--mono); font-weight:500; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="settings-layout">
+
+  <!-- Settings nav -->
+  <div class="settings-nav card" style="padding:10px;height:fit-content">
+    <div class="s-nav-item active" onclick="showSection('therapists',this)">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>
+      Therapists
+    </div>
+    <div class="s-nav-item" onclick="showSection('calibration',this)">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M12 1v4M12 19v4M4.22 4.22l2.83 2.83M16.95 16.95l2.83 2.83M1 12h4M19 12h4M4.22 19.78l2.83-2.83M16.95 7.05l2.83-2.83"/></svg>
+      Calibration
+    </div>
+    <div class="s-nav-item" onclick="showSection('sensors',this)">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+      Sensors
+    </div>
+    <div class="s-nav-item" onclick="showSection('config',this)">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="4" y1="6" x2="20" y2="6"/><line x1="8" y1="12" x2="20" y2="12"/><line x1="12" y1="18" x2="20" y2="18"/></svg>
+      Parameters
+    </div>
+    <div class="s-nav-item" onclick="showSection('system',this)">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+      System Info
+    </div>
+  </div>
+
+  <!-- Settings content -->
+  <div>
+
+    <!-- Therapists -->
+    <div class="settings-section show" id="sec-therapists">
+      <div class="card">
+        <div class="card-header">
+          <span class="card-title">Therapists</span>
+          <button class="btn btn-primary btn-sm" onclick="openModal('modalAddTherapist')">Add Therapist</button>
+        </div>
+        <div id="therapistList" style="display:flex;flex-direction:column;gap:8px">
+          <div style="color:var(--text3);font-size:13px;text-align:center;padding:16px">Loading…</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Calibration -->
+    <div class="settings-section" id="sec-calibration">
+      <div class="card">
+        <div class="card-header"><span class="card-title">Motor Homing</span></div>
+        <p style="font-size:13px;color:var(--text2);margin-bottom:16px">
+          Homing moves each motor to its minimum limit switch, backs off by 2°, then zeros the step counter. Always home before starting a therapy session.
+        </p>
+        <div class="calib-btn-row">
+          <button class="btn btn-primary" onclick="runHoming()">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>
+            Run Full Homing Sequence
+          </button>
+          <button class="btn btn-ghost" onclick="homeAxis(1)">Home M1 only</button>
+          <button class="btn btn-ghost" onclick="homeAxis(2)">Home M2 only</button>
+          <button class="btn btn-ghost" onclick="homeAxis(3)">Home M3 only</button>
+        </div>
+        <div id="homingStatus" style="margin-top:12px;font-size:13px;color:var(--text3);font-family:var(--mono)"></div>
+      </div>
+
+      <div class="card">
+        <div class="card-header"><span class="card-title">Current Calibration</span></div>
+        <div id="calibData" style="font-size:13px;color:var(--text2)">Loading calibration data…</div>
+      </div>
+    </div>
+
+    <!-- Sensors -->
+    <div class="settings-section" id="sec-sensors">
+      <div class="card">
+        <div class="card-header">
+          <span class="card-title">FSR Rest Baseline Calibration</span>
+          <span class="badge badge-amber">Required before each session</span>
+        </div>
+        <p style="font-size:13px;color:var(--text2);margin-bottom:16px">
+          With the leg cuff properly fitted and the patient relaxed (no intentional push or lift), press the button below. The system will sample 50 readings over 500ms and set the neutral baseline. This must be done per patient because body weight affects the FSR reading.
+        </p>
+        <div class="calib-btn-row">
+          <button class="btn btn-primary" onclick="calibrateFSR()">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+            Calibrate FSR Rest Baseline
+          </button>
+        </div>
+        <div id="fsrCalibResult" style="margin-top:12px;font-size:13px;font-family:var(--mono);color:var(--text3)"></div>
+      </div>
+
+      <div class="card">
+        <div class="card-header"><span class="card-title">Sensor Thresholds</span></div>
+        <div>
+          <div class="config-row">
+            <div class="config-info">
+              <div class="config-name">FSR Push Threshold</div>
+              <div class="config-desc">ADC units above rest baseline that count as a downward push (flexion intent)</div>
+            </div>
+            <div class="config-val" id="cfgFsrPush">150</div>
+          </div>
+          <div class="config-row">
+            <div class="config-info">
+              <div class="config-name">FSR Lift Threshold</div>
+              <div class="config-desc">ADC units below rest baseline that count as an upward lift (extension intent)</div>
+            </div>
+            <div class="config-val" id="cfgFsrLift">100</div>
+          </div>
+          <div class="config-row">
+            <div class="config-info">
+              <div class="config-name">EMG Activation Threshold</div>
+              <div class="config-desc">Minimum EMG RMS to confirm muscle activation. Calibrate per patient.</div>
+            </div>
+            <div class="config-val" id="cfgEmgThresh">80</div>
+          </div>
+          <div class="config-row">
+            <div class="config-info">
+              <div class="config-name">Dual Sensor Requirement</div>
+              <div class="config-desc">AND gate: both FSR and EMG must confirm intent before assist activates</div>
+            </div>
+            <span class="badge badge-green">ENABLED</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Parameters -->
+    <div class="settings-section" id="sec-config">
+      <div class="card">
+        <div class="card-header"><span class="card-title">Motor Parameters</span></div>
+        <div>
+          <div class="config-row">
+            <div class="config-info"><div class="config-name">Steps per Degree</div><div class="config-desc">200 steps × 8 microstepping × 26.67 gear ratio ÷ 360</div></div>
+            <div class="config-val">118.52</div>
+          </div>
+          <div class="config-row">
+            <div class="config-info"><div class="config-name">Gear Ratio</div><div class="config-desc">Worm gearbox reduction — non-backdrivable (self-locking)</div></div>
+            <div class="config-val">26.67:1</div>
+          </div>
+          <div class="config-row">
+            <div class="config-info"><div class="config-name">Microstepping</div><div class="config-desc">DM566 driver dip switch setting</div></div>
+            <div class="config-val">8×</div>
+          </div>
+          <div class="config-row">
+            <div class="config-info"><div class="config-name">Max Speed</div><div class="config-desc">AccelStepper maxSpeed() — increase carefully during testing</div></div>
+            <div class="config-val" id="cfgMaxSpeed">2000 sps</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header"><span class="card-title">Joint Safety Limits</span></div>
+        <div class="tbl-wrap">
+          <table>
+            <thead><tr><th>Joint</th><th>Min (°)</th><th>Max (°)</th><th>Safe Min (°)</th><th>Safe Max (°)</th><th>Home (°)</th></tr></thead>
+            <tbody>
+              <tr><td>M1 Hip Ab/Ad</td><td>-30</td><td>30</td><td>-25</td><td>25</td><td>0</td></tr>
+              <tr><td>M2 Hip Flex/Ext</td><td>0</td><td>120</td><td>2</td><td>115</td><td>0</td></tr>
+              <tr><td>M3 Knee Flex/Ext</td><td>0</td><td>130</td><td>2</td><td>125</td><td>0</td></tr>
+              <tr><td>M4 Cuff Align</td><td>-45</td><td>45</td><td>-40</td><td>40</td><td>0</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header"><span class="card-title">Safety System</span></div>
+        <div>
+          <div class="config-row">
+            <div class="config-info"><div class="config-name">E-Stop UDP Port</div><div class="config-desc">ESP32-C3 sends heartbeat here every 50ms</div></div>
+            <div class="config-val">5005</div>
+          </div>
+          <div class="config-row">
+            <div class="config-info"><div class="config-name">Heartbeat Timeout</div><div class="config-desc">Silence beyond this triggers E-stop</div></div>
+            <div class="config-val">100 ms</div>
+          </div>
+          <div class="config-row">
+            <div class="config-info"><div class="config-name">Re-home After E-Stop</div><div class="config-desc">Forces homing sequence before next session</div></div>
+            <span class="badge badge-green">ENABLED</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- System info -->
+    <div class="settings-section" id="sec-system">
+      <div class="card">
+        <div class="card-header"><span class="card-title">System Information</span></div>
+        <div class="sys-info-grid">
+          <div class="sys-info-box"><div class="sys-info-lbl">Device</div><div class="sys-info-val">RehabOS v1.0</div></div>
+          <div class="sys-info-box"><div class="sys-info-lbl">Platform</div><div class="sys-info-val">Raspberry Pi 5</div></div>
+          <div class="sys-info-box"><div class="sys-info-lbl">Serial Port</div><div class="sys-info-val" id="siPort">—</div></div>
+          <div class="sys-info-box"><div class="sys-info-lbl">Baud Rate</div><div class="sys-info-val">115200</div></div>
+          <div class="sys-info-box"><div class="sys-info-lbl">Arduino Status</div><div class="sys-info-val" id="siArduino">—</div></div>
+          <div class="sys-info-box"><div class="sys-info-lbl">E-Stop Remote</div><div class="sys-info-val" id="siESP">—</div></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header"><span class="card-title">Recent E-Stop Events</span></div>
+        <div id="estopLog" style="font-size:13px;color:var(--text2)">Loading…</div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <span class="card-title">System Events</span>
+          <select class="form-select" style="width:auto;padding:4px 28px 4px 10px;font-size:12px" onchange="loadSysLog(this.value)">
+            <option value="">All</option>
+            <option value="error">Errors</option>
+            <option value="warning">Warnings</option>
+            <option value="critical">Critical</option>
+          </select>
+        </div>
+        <div id="sysLogFull" style="max-height:260px;overflow-y:auto;display:flex;flex-direction:column;gap:5px">
+          Loading…
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- Add Therapist Modal -->
+<div class="modal-bg" id="modalAddTherapist">
+  <div class="modal">
+    <div class="modal-title">Add Therapist</div>
+    <div class="modal-sub">Create a new therapist account with a 4-digit PIN.</div>
+    <div style="display:flex;flex-direction:column;gap:12px">
+      <div class="g2">
+        <div class="form-group"><label class="form-label">First Name *</label><input type="text" class="form-input" id="tFirst"></div>
+        <div class="form-group"><label class="form-label">Last Name *</label><input type="text" class="form-input" id="tLast"></div>
+      </div>
+      <div class="g2">
+        <div class="form-group">
+          <label class="form-label">PIN (4 digits) *</label>
+          <input type="password" class="form-input" id="tPIN" maxlength="4" placeholder="••••">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Role</label>
+          <select class="form-select" id="tRole">
+            <option value="therapist">Therapist</option>
+            <option value="admin">Admin</option>
+          </select>
+        </div>
+      </div>
+    </div>
+    <div class="modal-footer">
+      <button class="btn btn-ghost" onclick="closeModal('modalAddTherapist')">Cancel</button>
+      <button class="btn btn-primary" onclick="addTherapist()">Add Therapist</button>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+function showSection(id, el){
+  document.querySelectorAll('.settings-section').forEach(s=>s.classList.remove('show'));
+  document.querySelectorAll('.s-nav-item').forEach(n=>n.classList.remove('active'));
+  document.getElementById('sec-'+id).classList.add('show');
+  el.classList.add('active');
+  if(id==='system') loadSystemInfo();
+  if(id==='calibration') loadCalib();
+}
+
+async function loadTherapists(){
+  try{
+    const ts=await apiFetch('/api/therapists');
+    const el=document.getElementById('therapistList');
+    if(!ts.length){ el.innerHTML='<div style="color:var(--text3);font-size:13px;text-align:center;padding:14px">No therapists yet. Add one above.</div>'; return; }
+    el.innerHTML=ts.map(t=>`
+      <div class="therapist-row">
+        <div class="t-av">${t.first_name[0]}${t.last_name[0]}</div>
+        <div style="flex:1">
+          <div style="font-size:13.5px;font-weight:500">${t.first_name} ${t.last_name}</div>
+          <div style="font-size:11.5px;color:var(--text3)">${t.role}</div>
+        </div>
+        <span class="badge badge-${t.role==='admin'?'teal':'gray'}">${t.role}</span>
+      </div>`).join('');
+  }catch(e){}
+}
+
+async function addTherapist(){
+  const first=document.getElementById('tFirst').value.trim();
+  const last=document.getElementById('tLast').value.trim();
+  const pin=document.getElementById('tPIN').value;
+  if(!first||!last||pin.length!==4){ toast('Fill in all fields. PIN must be 4 digits.','warning'); return; }
+  try{
+    await apiFetch('/api/therapists',{method:'POST',body:JSON.stringify({
+      first_name:first,last_name:last,pin,
+      role:document.getElementById('tRole').value
+    })});
+    closeModal('modalAddTherapist');
+    toast('Therapist added','success');
+    loadTherapists();
+  }catch(e){}
+}
+
+async function runHoming(){
+  const st=document.getElementById('homingStatus');
+  st.textContent='Homing sequence started…';
+  try{
+    await apiFetch('/api/therapy/home',{method:'POST'});
+    st.textContent='✓ Homing command sent. Watch motors move to limit switches.';
+    toast('Homing started','info');
+  }catch(e){ st.textContent='Failed to start homing.'; }
+}
+
+async function homeAxis(axis){
+  try{
+    await apiFetch('/api/therapy/angles',{method:'POST',body:JSON.stringify({angles:[0,0,0,0]})});
+    toast(`Axis ${axis} homing…`,'info');
+  }catch(e){}
+}
+
+async function calibrateFSR(){
+  const el=document.getElementById('fsrCalibResult');
+  el.textContent='Sampling FSR… ensure patient is relaxed.';
+  try{
+    const r=await apiFetch('/api/system/fsr/calibrate',{method:'POST'});
+    el.textContent=`✓ Rest baseline set to ${r.fsr_rest_raw.toFixed(1)} ADC. Update fsr_rest_raw in config.yaml to persist.`;
+    toast('FSR calibrated','success');
+  }catch(e){ el.textContent='Hardware not connected — calibration skipped.'; }
+}
+
+async function loadCalib(){
+  try{
+    const c=await apiFetch('/api/system/calibration/current');
+    const el=document.getElementById('calibData');
+    if(!c){ el.textContent='No calibration saved yet.'; return; }
+    el.innerHTML=`
+      <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px">
+        ${['ax1','ax2','ax3','ax4'].map((a,i)=>`
+        <div style="background:var(--surface2);border:1px solid var(--border);border-radius:var(--r);padding:10px;text-align:center">
+          <div style="font-size:10px;font-family:var(--mono);color:var(--text3);text-transform:uppercase">M${i+1} Home</div>
+          <div style="font-size:16px;font-family:var(--mono);font-weight:600">${(c[a+'_home_steps']||0).toFixed(0)}</div>
+          <div style="font-size:10px;color:var(--text3)">steps</div>
+        </div>`).join('')}
+      </div>
+      <div style="margin-top:10px;font-size:12px;color:var(--text3);font-family:var(--mono)">
+        Calibrated: ${new Date(c.calibrated_at).toLocaleString('en-GB')}
+      </div>`;
+  }catch(e){ document.getElementById('calibData').textContent='Load failed.'; }
+}
+
+async function loadSystemInfo(){
+  try{
+    const st=await apiFetch('/api/system/status');
+    document.getElementById('siArduino').textContent=st.serial?.is_open?'Connected':'Disconnected';
+    document.getElementById('siESP').textContent=st.safety?.state||'—';
+    document.getElementById('siPort').textContent='/dev/ttyUSB0';
+
+    const estops=await apiFetch('/api/system/estops/recent');
+    const el=document.getElementById('estopLog');
+    if(!estops.length){ el.textContent='No E-stop events recorded.'; return; }
+    el.innerHTML=`<div class="tbl-wrap"><table>
+      <thead><tr><th>Time</th><th>Source</th><th>Reason</th><th>Cleared</th></tr></thead>
+      <tbody>${estops.map(e=>`<tr>
+        <td style="font-family:var(--mono);font-size:12px">${new Date(e.triggered_at).toLocaleString('en-GB')}</td>
+        <td><span class="badge badge-red">${e.trigger_source}</span></td>
+        <td style="font-size:12px;color:var(--text2)">${e.trigger_reason||'—'}</td>
+        <td>${e.cleared_at?`<span class="badge badge-green">Cleared</span>`:`<span class="badge badge-amber">Active</span>`}</td>
+      </tr>`).join('')}</tbody>
+    </table></div>`;
+  }catch(e){}
+}
+
+async function loadSysLog(severity=''){
+  const q=severity?`?severity=${severity}`:'';
+  try{
+    const evs=await apiFetch(`/api/system/events${q}&limit=30`);
+    const el=document.getElementById('sysLogFull');
+    el.innerHTML=evs.map(e=>{
+      const t=new Date(e.timestamp).toLocaleTimeString('en-GB',{hour12:false});
+      const cls=e.severity==='error'||e.severity==='critical'?'red':e.severity==='warning'?'amber':'gray';
+      return `<div style="display:flex;gap:8px;font-size:11.5px;font-family:var(--mono)">
+        <span style="color:var(--text3);flex-shrink:0">${t}</span>
+        <span class="badge badge-${cls}" style="flex-shrink:0">${e.severity}</span>
+        <span style="color:var(--text2)">${e.message}</span>
+      </div>`;
+    }).join('');
+  }catch(e){}
+}
+
+loadTherapists();
+loadSysLog();
+</script>
+{% endblock %}

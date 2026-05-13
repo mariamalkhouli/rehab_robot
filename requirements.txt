@@ -1,0 +1,8 @@
+flask==3.0.3
+flask-socketio==5.3.6
+flask-sqlalchemy
+pyserial==3.5
+pyyaml==6.0.1
+numpy==1.26.4
+scipy
+eventlet==0.36.1
