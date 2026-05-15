@@ -180,6 +180,14 @@
       <button class="mode-tab"    onclick="setMode('mimicry',this)">Mimicry</button>
     </div>
   </div>
+  <div style="margin-left: 15px;">
+    <div class="sb-lbl">Target Exercise</div>
+    <select class="form-select" id="selEx" style="min-width:200px;padding:5px 28px 5px 9px;font-size:13px">
+      <option value="hip_ab_ad">Hip Abduction / Adduction</option>
+      <option value="hip_flex_ext">Hip Flexion / Extension</option>
+      <option value="knee_flex_ext">Knee Flexion / Extension</option>
+    </select>
+  </div>
   <div style="margin-left:auto;display:flex;gap:7px;align-items:center">
     <button class="btn btn-amber btn-sm" onclick="goAttachPos()" title="Move to cuff attachment position">
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><polyline points="10 17 15 12 10 7"/><line x1="15" y1="12" x2="3" y2="12"/></svg>
@@ -293,9 +301,9 @@
           </div></div>
         <div class="rom-live-item"><div class="rll">Speed (&#176;/s)</div>
           <div class="rom-stepper">
-            <button onclick="stepLive('rSpd',-1,1,15)">&#8722;</button>
+            <button onclick="stepLive('rSpd',-1,1,30)">&#8722;</button>
             <span id="rSpd">5&#176;/s</span>
-            <button onclick="stepLive('rSpd',1,1,15)">&#43;</button>
+            <button onclick="stepLive('rSpd',1,1,30)">&#43;</button>
           </div></div>
         <div class="rom-live-item"><div class="rll">Reps Target</div>
           <div class="rom-stepper">
@@ -631,6 +639,10 @@ function _applyMode(mode, btn) {
   if (btn) btn.classList.add('on');
   document.getElementById('mimicryPanel').style.display = mode === 'mimicry' ? 'block' : 'none';
   var em = document.getElementById('effortMode');
+  
+  const exSelect = document.getElementById('selEx');
+  const exLabel = exSelect.options[exSelect.selectedIndex].text;
+
   em.textContent  = mode === 'passive' ? 'Passive' : mode === 'active' ? 'Active-Assist' : 'Mimicry';
   em.className    = 'badge badge-' + (mode === 'active' ? 'green' : mode === 'mimicry' ? 'amber' : 'gray');
   sessionStorage.setItem('sid_mode', mode);
@@ -661,6 +673,11 @@ function cancelMimicry() {
 /* ── Session lifecycle ──────────────────────────────────────────────── */
 async function startSession() {
   if (!_patId) { toast('Select a patient first.', 'warning'); return; }
+  
+  // --- ADD THIS LINE TO GET THE EXERCISE ---
+  const chosenExercise = document.getElementById('selEx').value;
+  // -----------------------------------------
+
   if (_mode === 'mimicry' && _keyframes.length < 2) {
     toast('Save at least 2 keyframes before starting replay.', 'warning');
     return;
@@ -671,9 +688,11 @@ async function startSession() {
       body: JSON.stringify({
         patient_id:    parseInt(_patId),
         mode:          _mode,
+        exercise:      chosenExercise, 
         speed:         getROM('rSpd'),
         hip_flex_max:  getROM('rHip'),
         knee_flex_max: getROM('rKnee'),
+        ab_ad_max:     getROM('rAbAd'), // Ensure this is sent
         reps_target:   getROM('rReps'),
       })
     });
@@ -685,7 +704,9 @@ async function startSession() {
     document.getElementById('btnStop').disabled  = false;
     setBadge('green', 'Running');
     document.getElementById('topTimer').style.display = 'flex';
-    toast('Session #' + _sid + ' started.', 'success');
+    
+    // Update the toast to show the exercise name
+    toast('Session started: ' + chosenExercise.replace(/_/g, ' '), 'success');
   } catch(e) {}
 }
 

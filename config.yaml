@@ -249,10 +249,10 @@ sensors:
 # PASSIVE MODE (CPM — Continuous Passive Motion)
 # -----------------------------------------------------------------------------
 passive_mode:
-  default_speed_deg_per_sec: 5.0      # [TUNE] Angular velocity during CPM
+  default_speed_deg_per_sec: 10.0      # [TUNE] Angular velocity during CPM
                                         # Typical clinical range: 2–10 deg/sec
   min_speed_deg_per_sec: 1.0          # [SW]  Minimum allowed CPM speed
-  max_speed_deg_per_sec: 15.0         # [SW]  Maximum allowed CPM speed
+  max_speed_deg_per_sec: 30.0         # [SW]  Maximum allowed CPM speed
   default_rom_percent: 80.0           # [TUNE] % of patient's set ROM to use
                                         # e.g. if ROM is 0–90°, at 80% = 0–72°
   ramp_up_degrees: 10.0               # [TUNE] Degrees over which to accelerate
@@ -270,7 +270,7 @@ passive_mode:
 active_mode:
   control_loop_hz: 5                  # [SW]  How fast the assist loop runs (Hz)
   min_assist_speed_deg_per_sec: 2.0   # [TUNE] Minimum speed when assisting
-  max_assist_speed_deg_per_sec: 20.0  # [TUNE] Maximum speed when assisting
+  max_assist_speed_deg_per_sec: 35.0  # [TUNE] Maximum speed when assisting
                                         # FSR force magnitude mapped between min/max
   position_hold_tolerance_deg: 0.5    # [TUNE] If no intent, hold within this band
   intent_debounce_ms: 50              # [TUNE] Intent signal must be stable for

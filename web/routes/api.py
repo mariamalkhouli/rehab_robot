@@ -152,7 +152,7 @@ def estop_log():
     angles     = serial.get_current_angles() if serial else [None]*4
     session_id = serial.get_active_session_id() if serial else None
 
-    estop_id = log_estop(
+    estop_id = log_estop_event(
         session_id     = session_id,
         trigger_source = "manual_dashboard",
         trigger_reason = "Therapist pressed E-stop button on dashboard.",
@@ -385,6 +385,7 @@ def session_start():
         result = mgr.start_session(
             patient_id        = int(data["patient_id"]),
             mode              = data["mode"],
+            exercise   = data.get("exercise", "hip_knee_flex"),
             leg               = data.get("leg", "right"),
             hip_flex_max      = float(data.get("hip_flex_max", 90.0)),
             knee_flex_max     = float(data.get("knee_flex_max", 90.0)),

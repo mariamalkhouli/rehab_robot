@@ -326,6 +326,7 @@ def _start_sensor_hub(serial_comm: SerialComm) -> SensorHub:
 def _start_flask(serial_comm: SerialComm,
                  safety_monitor: SafetyMonitor,
                  sensor_hub: SensorHub):
+                 
     """
     Step 7 — Create and start the Flask-SocketIO web server.
     This call BLOCKS — it must be the last thing called in main().
@@ -424,7 +425,7 @@ def _on_estop_triggered(source: str, reason: str):
 
     # 2. Log to database
     try:
-        from core.database import log_estop
+        from core.database import log_estop_event
 
         # Get current motor positions if available
         angles = None
@@ -447,7 +448,7 @@ def _on_estop_triggered(source: str, reason: str):
             except Exception:
                 pass
 
-        log_estop(
+        log_estop_event(
             session_id=session_id,
             trigger_source=source,
             trigger_reason=reason,

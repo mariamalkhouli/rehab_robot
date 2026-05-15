@@ -112,6 +112,7 @@ class SessionManager:
         self._patient_id    : Optional[int] = None
         self._mode          : Optional[str] = None
         self._leg           : str           = 'right'
+        self._exercise      : str           = 'hip_flex_ext'
         self._start_time    : Optional[float] = None
 
         # ── ROM / motion parameters ────────────────────────────────────────
@@ -156,6 +157,7 @@ class SessionManager:
         self,
         patient_id       : int,
         mode             : str,
+        exercise         : str   = 'hip_flex_ext',
         leg              : str   = 'right',
         hip_flex_max     : float = 90.0,
         knee_flex_max    : float = 90.0,
@@ -198,6 +200,7 @@ class SessionManager:
             # Store ROM parameters
             self._patient_id    = patient_id
             self._mode          = mode
+            self._exercise = exercise
             self._leg           = leg
             self._hip_flex_max  = float(hip_flex_max)
             self._knee_flex_max = float(knee_flex_max)
@@ -290,7 +293,8 @@ class SessionManager:
                 return {'ok': False, 'error': 'No active session.'}
             if self._state in (SessionState.ENDED, SessionState.IDLE):
                 return {'ok': False, 'error': 'Session already ended.'}
-
+            if self._serial:
+                self._serial.send_halt() # Stop Arduino pulses immediately
             sid           = self._session_id
             reps          = self._reps_done
             self._state   = SessionState.STOPPING
@@ -300,7 +304,9 @@ class SessionManager:
         # Stop mode thread (outside lock to avoid deadlock)
         if mode_obj is not None:
             mode_obj.stop()
-
+        # 2. NOW send HALT — guaranteed no mode thread can overwrite it
+        if self._serial:
+           self._serial.send_halt()
         # Flush remaining sensor data
         self._flush_buffer()
 

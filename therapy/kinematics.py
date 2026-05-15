@@ -520,6 +520,21 @@ class KinematicsEngine:
         # Combine — avoid duplicate midpoint
         return outward + inward[1:]
 
+    def fill_m4(self, angles: JointAngles) -> JointAngles:
+            """
+            Calculates Motor 4 to keep the end-effector parallel to the leg.
+            Math: The shank link's angle relative to the bed is (ax2 - ax3).
+            Motor 4 must rotate exactly opposite to this to remain 'level'.
+            """
+            # We use a compensation factor from config (usually 1.0)
+            k = getattr(CFG.kinematics, 'cuff_compensation_factor', 1.0)
+            
+            # This keeps the cuff at a constant orientation relative to the bed
+            # regardless of how high the hip is or how bent the knee is.
+            angles.ax4 = -(angles.ax2 - angles.ax3) * k
+            
+            return angles
+
     def generate_coordinated_cpm(
         self,
         hip_max_deg: float  = 60.0,
@@ -571,24 +586,22 @@ class KinematicsEngine:
 
     def clamp_to_safe_limits(self, angles: JointAngles) -> JointAngles:
         """
-        Clamp all joint angles to their configured safe limits.
-        Uses safe_min_deg and safe_max_deg (5° inside the hardware limits).
-
-        This is called on every trajectory point BEFORE sending to serial_comm.
-        serial_comm.send_angles() also clamps — this is a belt-and-suspenders
-        double check at the kinematics level.
+        1. Calculates the correct M4 orientation.
+        2. Clamps all angles to hardware safety limits.
         """
+        # FIRST: Automatically calculate Motor 4 orientation
+        angles = self.fill_m4(angles)
+                
+        # SECOND: Apply the safety clamps from config
+
         j = CFG.joints
         return JointAngles(
-            ax1 = max(j.hip_ab_ad.safe_min_deg,
-                      min(j.hip_ab_ad.safe_max_deg,    angles.ax1)),
-            ax2 = max(j.hip_flex_ext.safe_min_deg,
-                      min(j.hip_flex_ext.safe_max_deg, angles.ax2)),
-            ax3 = max(j.knee_flex_ext.safe_min_deg,
-                      min(j.knee_flex_ext.safe_max_deg, angles.ax3)),
-            ax4 = max(j.axis4.safe_min_deg,
-                      min(j.axis4.safe_max_deg,         angles.ax4)),
+            ax1 = max(j.hip_ab_ad.safe_min_deg,    min(j.hip_ab_ad.safe_max_deg,    angles.ax1)),
+            ax2 = max(j.hip_flex_ext.safe_min_deg,  min(j.hip_flex_ext.safe_max_deg,  angles.ax2)),
+            ax3 = max(j.knee_flex_ext.safe_min_deg, min(j.knee_flex_ext.safe_max_deg, angles.ax3)),
+            ax4 = max(j.axis4.safe_min_deg,         min(j.axis4.safe_max_deg,         angles.ax4)),
         )
+
 
     def validate_angles(self, angles: JointAngles) -> Tuple[bool, str]:
         """

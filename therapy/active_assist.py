@@ -315,35 +315,56 @@ class ActiveAssist:
                 #   step = speed (°/s) × period (s)
                 step = self._current_speed * _CTRL_PERIOD_SEC
 
-                # Step 5: Compute new hip and knee angles based on direction
+# --- STEP 5: COMPUTE NEW ANGLES BASED ON EXERCISE TYPE ---
+                
+                # Get the current exercise from the manager
+                ex = getattr(self._mgr, '_exercise', 'hip_flex_ext')
+                
+                # Start with current angles as the baseline
+                ax1_target = ax1_cur
+                ax2_target = ax2_cur
+                ax3_target = ax3_cur
+
                 if direction == 'PUSH':
-                    # Flexion: increase both hip and knee angles
-                    ax2_new = ax2_cur + step
-                    ax3_new = ax3_cur + step
-                    # Clamp to therapist-set ROM targets AND safe joint limits
-                    ax2_new = min(ax2_new, hip_max,
-                                  CFG.joints.hip_flex_ext.safe_max_deg)
-                    ax3_new = min(ax3_new, knee_max,
-                                  CFG.joints.knee_flex_ext.safe_max_deg)
+                    # --- INTENT: FLEXION / PUSH DOWN ---
+                    if ex == "hip_ab_ad":
+                        ax1_target = ax1_cur + step
+                    elif ex == "knee_flex_ext":
+                        ax3_target = ax3_cur + step
+                        ax2_target = ax3_target * 0.2 # Coupled thigh lift
+                    else: # hip_flex_ext
+                        ax2_target = ax2_cur + step
 
-                else:  # direction == 'LIFT'
-                    # Extension: decrease both hip and knee angles toward 0
-                    ax2_new = ax2_cur - step
-                    ax3_new = ax3_cur - step
-                    # Clamp to safe joint limits (floor at safe_min_deg = 2°)
-                    ax2_new = max(ax2_new, CFG.joints.hip_flex_ext.safe_min_deg)
-                    ax3_new = max(ax3_new, CFG.joints.knee_flex_ext.safe_min_deg)
+                else: # direction == 'LIFT'
+                    # --- INTENT: EXTENSION / LIFT UP ---
+                    if ex == "hip_ab_ad":
+                        ax1_target = ax1_cur - step
+                    elif ex == "knee_flex_ext":
+                        ax3_target = ax3_cur - step
+                        ax2_target = ax3_target * 0.2 # Coupled thigh lower
+                    else: # hip_flex_ext
+                        ax2_target = ax2_cur - step
 
-                # Step 6: Build JointAngles and compute M4 automatically
-                #   ax1 (abduction) is held at current value throughout
-                #   ax4 is computed by fill_m4 from ax2 and ax3
+                # --- STEP 6: BUNDLE, AUTO-LEVEL M4, AND CLAMP ---
+                # We create a JointAngles object. We leave ax4 as 0.0 because 
+                # clamp_to_safe_limits() now calculates it automatically.
                 target = JointAngles(
-                    ax1 = ax1_cur,
-                    ax2 = ax2_new,
-                    ax3 = ax3_new,
-                    ax4 = 0.0,    # placeholder — fill_m4 overwrites this
+                    ax1 = ax1_target,
+                    ax2 = ax2_target,
+                    ax3 = ax3_target,
+                    ax4 = 0.0 
                 )
-                target         = self._engine.fill_m4(target)
+                
+                # This call now:
+                # 1. Runs fill_m4() to keep the cuff parallel to the shank
+                # 2. Clamps the angles to the therapist's set ROM (from config)
+                target = self._engine.clamp_to_safe_limits(target)
+                
+                # Final check: Ensure we don't exceed the LIVE ROM limits set on dashboard
+                target.ax1 = max(-15.0, min(rom['ab_ad_max'], target.ax1))
+                target.ax2 = max(0.0,    min(rom['hip_flex_max'], target.ax2))
+                target.ax3 = max(0.0,    min(rom['knee_flex_max'], target.ax3))
+                
                 angles_to_send = target.to_list()
 
                 # Step 7: Send to Arduino

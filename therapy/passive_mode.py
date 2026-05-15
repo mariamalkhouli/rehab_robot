@@ -237,51 +237,52 @@ class PassiveMode:
     # =========================================================================
 
     def _build_cycle_trajectories(
-        self,
-        hip_max  : float,
-        knee_max : float,
-        speed    : float,
-    ) -> Tuple[List[JointAngles], List[JointAngles]]:
-        """
-        Build the outward and return trajectories for one CPM cycle.
+            self,
+            hip_max  : float,
+            knee_max : float,
+            speed    : float,
+        ) -> Tuple[List[JointAngles], List[JointAngles]]:
+            """
+            Build trajectories based on the specific clinical exercise chosen.
+            """
+            n_points = CFG.passive_mode.trajectory_points
+            home = JointAngles(ax1=0.0, ax2=0.0, ax3=0.0, ax4=0.0)
 
-        Exercise: Combined hip + knee flexion.
-            - Home position: ax1=0°, ax2=0°, ax3=0°
-            - Max position : ax1=0°, ax2=hip_max, ax3=knee_max
-            - ax4 computed automatically by fill_m4() inside generate_trajectory()
-              via kinematics.clamp_to_safe_limits() which calls fill_m4()
+            # Get the exercise ID from the manager (set by the web dropdown)
+            # IDs: 'hip_ab_ad', 'hip_flex_ext', 'knee_flex_ext'
+            exercise_type = getattr(self._mgr, '_exercise', 'hip_flex_ext')
 
-        Profile: cosine S-curve — zero velocity at both endpoints.
-        Points : CFG.passive_mode.trajectory_points = 200 (fixed for smoothness)
+            if exercise_type == "hip_ab_ad":
+                # --- EXERCISE 1: SIDEYWAYS (Pivot) ---
+                # Moves ONLY Axis 1. Hip/Knee/Cuff stay at 0.
+                peak = JointAngles(ax1=self._mgr._ab_ad_max, ax2=0.0, ax3=0.0)
+                logger.info(f"Exercise: Hip Abduction to {self._mgr._ab_ad_max}°")
+            
+            elif exercise_type == "hip_flex_ext":
+                # --- EXERCISE 2: UP/DOWN (Straight Leg Raise) ---
+                # Moves ONLY Axis 2. Knee (ax3) is locked at 0.
+                # M4 (ax4) will auto-calculate in the kinematics engine.
+                peak = JointAngles(ax1=0.0, ax2=hip_max, ax3=0.0)
+                logger.info(f"Exercise: Hip Flexion (SLR) to {hip_max}°")
 
-        Args:
-            hip_max  : Target hip flexion (degrees)
-            knee_max : Target knee flexion (degrees)
-            speed    : Angular velocity (degrees/sec) — used for timing, not here
+            elif exercise_type == "knee_flex_ext":
+                # --- EXERCISE 3: KNEE BEND (Coupled) ---
+                # Moves Axis 3. Axis 2 follows at 20% to lift the thigh
+                # so the patient's heel doesn't hit the bed.
+                peak = JointAngles(ax1=0.0, ax2=knee_max * 0.2, ax3=knee_max)
+                logger.info(f"Exercise: Knee Flexion to {knee_max}° (Hip follower active)")
 
-        Returns:
-            (outward, inward) — two lists of JointAngles
-        """
-        n_points = CFG.passive_mode.trajectory_points
+            else:
+                # Fallback
+                peak = JointAngles(ax1=0.0, ax2=0.0, ax3=0.0)
 
-        home = JointAngles(ax1=0.0, ax2=0.0,    ax3=0.0,      ax4=0.0)
-        peak = JointAngles(ax1=0.0, ax2=hip_max, ax3=knee_max, ax4=0.0)
+            # Generate trajectories. 
+            # Note: generate_trajectory calls clamp_to_safe_limits internally, 
+            # which now handles the Motor 4 orientation automatically!
+            outward = self._engine.generate_trajectory(home, peak, n_points, 'cosine')
+            inward  = self._engine.generate_trajectory(peak, home, n_points, 'cosine')
 
-        outward = self._engine.generate_trajectory(
-            start    = home,
-            end      = peak,
-            n_points = n_points,
-            profile  = 'cosine',
-        )
-
-        inward = self._engine.generate_trajectory(
-            start    = peak,
-            end      = home,
-            n_points = n_points,
-            profile  = 'cosine',
-        )
-
-        return outward, inward
+            return outward, inward
 
     # =========================================================================
     #  Sweep execution
