@@ -622,6 +622,51 @@ def keyframe_save(path_id):
     )
     return ok({"keyframe_id": kf_id, "angles": angles}), 201
 
+@api_bp.route("/therapy/mimicry/keyframe", methods=["POST"])
+def mimicry_add_keyframe():
+    mgr = _mgr()
+    if not mgr or mgr._mode != 'mimicry':
+        return err("No active Mimicry session.")
+
+    if mgr._mode != 'mimicry':
+        return err(f"System is in '{mgr._mode}' mode. You must click the Green START button while in Mimicry tab first!")
+    
+    # Access the MimicryMode object inside the SessionManager
+    mimicry_obj = mgr._mode_obj 
+    if not mimicry_obj:
+        return err("Mimicry engine not ready.")
+
+    data = request.get_json()
+    # This calls the add_keyframe method in your mimicry_mode.py file!
+    result = mimicry_obj.add_keyframe(
+        hold_time_ms = data.get("hold_time_ms", 0.0)
+    )
+    return jsonify(result)
+
+@api_bp.route("/therapy/mimicry/replay", methods=["POST"])
+def mimicry_start_replay():
+    mgr = _mgr()
+    
+    # 1. Check if the session manager exists
+    if not mgr:
+        return err("Robot Manager not initialized.")
+        
+    # 2. Check if the Green START button was clicked (mgr._mode must be 'mimicry')
+    if mgr._mode != 'mimicry':
+        return err("System not in Mimicry mode. Click the Green START button first!")
+
+    # 3. Check if the Mimicry object is alive
+    if not mgr._mode_obj:
+        return err("Mimicry engine not ready.")
+
+    # 4. Start the replay thread
+    result = mgr._mode_obj.start_replay()
+    
+    if result.get('ok'):
+        return ok(result)
+    else:
+        return err(result.get('error', 'Replay failed to start'))
+
 
 # =============================================================================
 #  ANALYTICS

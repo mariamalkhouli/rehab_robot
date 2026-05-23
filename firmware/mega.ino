@@ -79,7 +79,7 @@ const float STEPS_PER_DEGREE = 118.52;
 // Step pulse delay in microseconds — controls motor speed
 // Lower = faster. Do not go below 150 without testing for stall.
 // 400 = safe starting speed. Reduce gradually during testing.
-const int STEP_DELAY_US = 400;
+const int STEP_DELAY_US = 150;
 
 // =============================================================================
 //  SYSTEM STATE
@@ -196,6 +196,28 @@ void handleSerial() {
       return;
     }
     parseAngleCommand(input.substring(2));   // Strip "A:" prefix
+    return;
+  }
+
+  // ── JOG: — manual relative move ──────────────────────────────────────────
+  if (input.startsWith("JOG:")) {
+    if (isHalted) {
+      Serial.println("ERR:HALTED_IGNORING_JOG_CMD");
+      return;
+    }
+    
+    // Parse JOG:axis,steps (e.g., JOG:1,119)
+    int colonIdx = input.indexOf(':');
+    int commaIdx = input.indexOf(',');
+    
+    int axis = input.substring(colonIdx + 1, commaIdx).toInt();
+    long steps = input.substring(commaIdx + 1).toInt();
+    
+    if (axis >= 1 && axis <= 4) {
+      // Add the steps to the current position
+      targetSteps[axis-1] = currentSteps[axis-1] + steps;
+      Serial.println("ACK:JOGGING");
+    }
     return;
   }
 

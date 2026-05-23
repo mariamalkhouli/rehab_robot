@@ -678,10 +678,10 @@ async function startSession() {
   const chosenExercise = document.getElementById('selEx').value;
   // -----------------------------------------
 
-  if (_mode === 'mimicry' && _keyframes.length < 2) {
-    toast('Save at least 2 keyframes before starting replay.', 'warning');
-    return;
-  }
+  // (_mode === 'mimicry' && _keyframes.length < 2) {
+  // toast('Save at least 2 keyframes before starting replay.', 'warning');
+  //  return;
+  //}
   try {
     var r = await apiFetch('/api/sessions/start', {
       method: 'POST',
@@ -744,6 +744,10 @@ function setBadge(color, text) {
   var b = document.getElementById('statusBadge');
   b.className = 'badge badge-' + color;
   b.textContent = text;
+  const saveBtn = document.querySelector('[onclick="saveKeyframe()"]');
+  if (saveBtn) {
+      saveBtn.disabled = (text !== 'Running');
+  }
 }
 
 /* ── Timer ──────────────────────────────────────────────────────────── */
@@ -788,16 +792,46 @@ async function jogAxis(axis, steps) {
 }
 
 /* ── Keyframes ──────────────────────────────────────────────────────── */
-function saveKeyframe() {
-  /* Read current motor angles from the gauge displays */
-  var ax1 = parseFloat(document.getElementById('gv1').textContent) || 0;
-  var ax2 = parseFloat(document.getElementById('gv2').textContent) || 0;
-  var ax3 = parseFloat(document.getElementById('gv3').textContent) || 0;
-  var ax4 = parseFloat(document.getElementById('gv4').textContent) || 0;
+async function saveKeyframe() {
+  // 1. Read current motor angles from the gauge displays
+  const ax1 = parseFloat(document.getElementById('gv1').textContent) || 0;
+  const ax2 = parseFloat(document.getElementById('gv2').textContent) || 0;
+  const ax3 = parseFloat(document.getElementById('gv3').textContent) || 0;
+  const ax4 = parseFloat(document.getElementById('gv4').textContent) || 0;
 
-  _keyframes.push({idx: _keyframes.length, ax1:ax1, ax2:ax2, ax3:ax3, ax4:ax4});
-  renderKeyframes();
-  toast('Keyframe ' + _keyframes.length + ' saved.', 'success');
+  // Prepare the package for the API
+  const keyframeData = {
+    ax1: ax1,
+    ax2: ax2,
+    ax3: ax3,
+    ax4: ax4,
+    hold_time_ms: 0
+  };
+
+  try {
+    // 2. Upload the keyframe to the Robot's brain (MimicryMode object)
+    // This calls the backend to store the point in the Pi's memory
+    await apiFetch('/api/therapy/mimicry/keyframe', {
+      method: 'POST',
+      body: JSON.stringify(keyframeData)
+    });
+
+    // 3. Add to the local UI list for the doctor to see
+    _keyframes.push({
+      idx: _keyframes.length,
+      ax1: ax1,
+      ax2: ax2,
+      ax3: ax3,
+      ax4: ax4
+    });
+
+    renderKeyframes();
+    toast('Keyframe ' + _keyframes.length + ' saved to Pi.', 'success');
+
+  } catch(e) {
+    console.error("Mimicry Save Error:", e);
+    toast('Error: Robot not in Mimicry mode or disconnected.', 'error');
+  }
 }
 
 function renderKeyframes() {
@@ -843,9 +877,28 @@ function clearKeyframes() {
 }
 
 async function startReplay() {
-  if (_keyframes.length < 2) { toast('Need at least 2 keyframes.', 'warning'); return; }
-  toast('Replay starting\u2026', 'info');
-  document.getElementById('btnStart').click();
+  // 1. Validation
+  if (_keyframes.length < 2) { 
+    toast('Need at least 2 keyframes before you can Replay.', 'warning'); 
+    return; 
+  }
+  
+  toast('Sending Replay command to Robot...', 'info');
+
+  try {
+    // 2. Call the dedicated Replay API (The one in api.py)
+    const response = await apiFetch('/api/therapy/mimicry/replay', { 
+      method: 'POST' 
+    });
+
+    if (response.ok || response) {
+        toast('Replay sequence active! Motors are moving.', 'success');
+        setBadge('blue', 'Replaying'); // Update the badge to show we are moving
+    }
+  } catch(e) {
+    console.error("Replay Error:", e);
+    toast('Replay failed: ' + e.message, 'error');
+  }
 }
 
 /* ── E-stop sync ────────────────────────────────────────────────────── */
